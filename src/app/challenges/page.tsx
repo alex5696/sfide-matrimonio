@@ -1,12 +1,13 @@
 "use client";
 import { useEffect, useState } from "react";
-import { supabase } from "../../lib/supabase";
+import { supabase } from "@/lib/supabase";
 import Link from 'next/link';
 
 export default function ChallengesPage() {
   const [challenges, setChallenges] = useState<any[]>([]);
   const [targetPoints, setTargetPoints] = useState(1000); 
   const [loading, setLoading] = useState(true);
+  const [caption, setCaption] = useState(""); // Stato per la didascalia
 
   useEffect(() => {
     fetchData();
@@ -14,13 +15,11 @@ export default function ChallengesPage() {
 
   async function fetchData() {
     setLoading(true);
-    // 1. Carica le Sfide
     const { data: challengesData } = await supabase
       .from("Challenges")
       .select("*")
       .order('id', { ascending: true });
 
-    // 2. Carica il Target dalla tabella Settings
     const { data: settingsData } = await supabase
       .from("Settings")
       .select("target_points")
@@ -50,11 +49,17 @@ export default function ChallengesPage() {
 
     const { data: { publicUrl } } = supabase.storage.from('media').getPublicUrl(fileName);
 
+    // Aggiorniamo includendo la didascalia (caption)
     await supabase
       .from("Challenges")
-      .update({ media_url: publicUrl, is_completed: true })
+      .update({ 
+        media_url: publicUrl, 
+        is_completed: true,
+        caption: caption // Salviamo la didascalia
+      })
       .eq('id', challengeId);
 
+    setCaption(""); // Reset della didascalia
     fetchData();
   }
 
@@ -68,7 +73,7 @@ export default function ChallengesPage() {
 
     await supabase
       .from("Challenges")
-      .update({ media_url: null, is_completed: false })
+      .update({ media_url: null, is_completed: false, caption: null })
       .eq('id', challengeId);
 
     fetchData();
@@ -112,7 +117,6 @@ export default function ChallengesPage() {
         </div>
 
         <div className="grid gap-6">
-          
           {/* MESSAGGIO DI VITTORIA */}
           {progressPercentage === 100 && (
             <div className="bg-yellow-400 text-purple-900 p-8 rounded-3xl mb-4 text-center border-4 border-white animate-bounce shadow-2xl">
@@ -122,7 +126,6 @@ export default function ChallengesPage() {
           )}
 
           {challenges.map((challenge) => {
-            // Verifica se il file caricato è un video
             const isVideo = challenge.media_url?.toLowerCase().match(/\.(mp4|mov|webm|quicktime)$/);
 
             return (
@@ -155,17 +158,29 @@ export default function ChallengesPage() {
                          <img src={challenge.media_url} alt="Prova" className="w-full h-56 object-cover" />
                        )}
                     </div>
+                    {challenge.caption && (
+                      <p className="bg-black/20 p-3 rounded-lg italic text-sm text-center border border-white/10">
+                        "{challenge.caption}"
+                      </p>
+                    )}
                     <button 
                       onClick={() => handleDelete(challenge.id, challenge.media_url)}
                       className="w-full bg-red-500/10 hover:bg-red-500/30 text-red-200 text-[10px] py-2 rounded-lg border border-red-500/30 transition-all uppercase font-bold tracking-tighter"
                     >
-                      🗑️ Errore? Elimina e rifai la sfida
+                      🗑️ Errore? Elimina e rifai
                     </button>
                   </div>
                 ) : (
-                  <div className="mt-4">
+                  <div className="mt-4 space-y-3">
+                    <input 
+                      type="text" 
+                      placeholder="Scrivi una didascalia simpatica..." 
+                      className="w-full bg-white/5 border border-white/20 p-3 rounded-xl text-sm focus:outline-none focus:border-yellow-400"
+                      onChange={(e) => setCaption(e.target.value)}
+                      value={caption}
+                    />
                     <label className="block w-full bg-white text-purple-900 text-center py-4 rounded-xl font-black cursor-pointer hover:bg-yellow-400 active:scale-95 transition-all shadow-xl uppercase tracking-widest">
-                      📸 Carica Prova
+                      📸 Carica Foto/Video
                       <input 
                         type="file" 
                         accept="image/*,video/*" 
@@ -179,6 +194,25 @@ export default function ChallengesPage() {
               </div>
             );
           })}
+        </div>
+
+        {/* SEZIONE GALLERIA RICORDI */}
+        <div className="mt-20">
+          <h2 className="text-3xl font-black uppercase italic text-center mb-8 text-yellow-400">📸 Galleria dei Ricordi</h2>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            {challenges.filter(c => c.is_completed).map((completed) => (
+              <div key={`gallery-${completed.id}`} className="group relative rounded-xl overflow-hidden border border-white/20 aspect-square bg-black">
+                <img 
+                  src={completed.media_url} 
+                  className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity"
+                  alt="Ricordo"
+                />
+                <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black text-[10px] leading-tight">
+                   {completed.caption}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
         
         <div className="mt-16 text-center">
