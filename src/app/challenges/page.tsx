@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { supabase } from "../../lib/supabase"; // Percorso corretto per il tuo progetto
+import { supabase } from "../../lib/supabase"; 
 import Link from 'next/link';
 
 export default function ChallengesPage() {
@@ -31,6 +31,23 @@ export default function ChallengesPage() {
     if (settingsData?.target_points) setTargetPoints(settingsData.target_points);
     setLoading(false);
   }
+
+  // Funzione per scaricare una singola foto
+  const downloadPhoto = async (url: string, filename: string) => {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = `${filename.replace(/\s+/g, '_')}.jpg`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      alert("Errore nel download. Prova a tenere premuto sulla foto e seleziona 'Salva immagine'.");
+    }
+  };
 
   async function handleUpload(e: any, challengeId: number) {
     const file = e.target.files[0];
@@ -96,17 +113,17 @@ export default function ChallengesPage() {
   });
 
   if (loading) return (
-    <div className="min-h-screen bg-purple-900 flex items-center justify-center text-white font-bold uppercase tracking-tighter animate-pulse">
-      Sincronizzazione in corso...
+    <div className="min-h-screen bg-purple-900 flex items-center justify-center text-white font-bold uppercase animate-pulse">
+      Sincronizzazione...
     </div>
   );
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-purple-900 via-fuchsia-800 to-pink-700 text-white p-4 md:p-8 pb-20">
+    <main className="min-h-screen bg-gradient-to-br from-purple-900 via-fuchsia-800 to-pink-700 text-white p-4 md:p-8 pb-20 print:bg-white print:text-black print:p-0">
       <div className="max-w-4xl mx-auto">
         
-        {/* PROGRESS BAR */}
-        <div className="bg-white/10 p-6 rounded-3xl border border-white/20 mb-8 sticky top-4 z-20 backdrop-blur-md shadow-2xl">
+        {/* PROGRESS BAR (Nascosta in stampa) */}
+        <div className="bg-white/10 p-6 rounded-3xl border border-white/20 mb-8 sticky top-4 z-20 backdrop-blur-md shadow-2xl print:hidden">
           <div className="flex flex-col md:flex-row justify-between items-center mb-4">
             <div className="text-center md:text-left">
               <p className="text-sm uppercase font-bold opacity-70 tracking-widest text-pink-200">Progresso Matrimonio</p>
@@ -124,28 +141,41 @@ export default function ChallengesPage() {
           </div>
         </div>
 
-        {/* FILTRI */}
-        <div className="flex justify-center gap-2 mb-8">
+        {/* FILTRI E TASTO REPORT (Nascosti in stampa) */}
+        <div className="flex flex-wrap justify-center gap-2 mb-8 print:hidden">
           {['all', 'pending', 'completed'].map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
-              className={`px-5 py-2 rounded-full text-xs font-bold uppercase tracking-widest transition-all shadow-lg ${
-                filter === f ? 'bg-yellow-400 text-purple-900 scale-110' : 'bg-white/10 text-white border border-white/20 hover:bg-white/20'
+              className={`px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all ${
+                filter === f ? 'bg-yellow-400 text-purple-900 scale-110 shadow-lg' : 'bg-white/10 text-white border border-white/20'
               }`}
             >
               {f === 'all' ? 'Tutte' : f === 'pending' ? 'Da fare' : 'Fatte'}
             </button>
           ))}
+          
+          <button 
+            onClick={() => window.print()}
+            className="px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest bg-green-500 text-white shadow-lg hover:bg-green-400 transition-all ml-2"
+          >
+            📄 Scarica Report PDF
+          </button>
         </div>
 
-        {/* GRID DELLE SFIDE */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* INTESTAZIONE SOLO PER STAMPA */}
+        <div className="hidden print:block text-center mb-10 border-b-2 border-black pb-4 text-black">
+          <h1 className="text-4xl font-black uppercase">Report Sfide Matrimonio</h1>
+          <p className="text-xl">Simone ha totalizzato {currentPoints} punti!</p>
+        </div>
+
+        {/* GRID DELLE SFIDE (Nascosta in stampa) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 print:hidden">
           {filteredChallenges.map((challenge) => (
             <div 
               key={challenge.id} 
               onClick={() => setSelectedChallenge(challenge)}
-              className={`p-5 rounded-2xl border cursor-pointer transition-all hover:translate-y-[-5px] active:scale-95 shadow-xl flex flex-col justify-between h-32 ${
+              className={`p-5 rounded-2xl border cursor-pointer transition-all hover:translate-y-[-2px] active:scale-95 shadow-xl flex flex-col justify-between h-32 ${
                 challenge.is_completed 
                 ? 'bg-green-600/20 border-green-400/30 opacity-80' 
                 : 'bg-white/10 border-white/20 hover:border-yellow-400/50'
@@ -162,36 +192,36 @@ export default function ChallengesPage() {
                   {challenge.title}
                 </h2>
               </div>
-              <p className="text-[10px] opacity-40 font-bold text-right uppercase tracking-widest">Dettagli sfidante →</p>
+              <p className="text-[10px] opacity-40 font-bold text-right uppercase tracking-widest">Dettagli →</p>
             </div>
           ))}
         </div>
 
-        {/* POP-UP (MODALE) */}
+        {/* POP-UP (Nascosto in stampa) */}
         {selectedChallenge && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 print:hidden">
             <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setSelectedChallenge(null)}></div>
-            <div className="bg-purple-950 border-2 border-white/20 w-full max-w-lg rounded-3xl p-6 relative z-10 shadow-2xl animate-in zoom-in duration-200">
-              <button 
-                onClick={() => setSelectedChallenge(null)}
-                className="absolute top-4 right-4 text-white/50 hover:text-white text-2xl"
-              >✕</button>
+            <div className="bg-purple-950 border-2 border-white/20 w-full max-w-lg rounded-3xl p-6 relative z-10 shadow-2xl">
+              <button onClick={() => setSelectedChallenge(null)} className="absolute top-4 right-4 text-white/50 hover:text-white text-2xl">✕</button>
               
-              <h2 className="text-3xl font-black text-yellow-400 uppercase leading-none mb-2">{selectedChallenge.title}</h2>
-              <p className="text-lg opacity-80 mb-6 leading-tight">{selectedChallenge.descriptions}</p>
+              <h2 className="text-2xl font-black text-yellow-400 uppercase mb-2">{selectedChallenge.title}</h2>
+              <p className="text-sm opacity-80 mb-6">{selectedChallenge.descriptions}</p>
 
               {selectedChallenge.is_completed ? (
                 <div className="space-y-4">
-                  <div className="rounded-2xl overflow-hidden border-2 border-white/10 shadow-inner">
-                    <img src={selectedChallenge.media_url} className="w-full aspect-video object-cover" alt="Prova" />
-                  </div>
+                  <img src={selectedChallenge.media_url} className="w-full aspect-video object-cover rounded-2xl shadow-lg" alt="Prova" />
                   {selectedChallenge.caption && <p className="italic text-center text-pink-200">"{selectedChallenge.caption}"</p>}
-                  <button 
-                    onClick={() => handleDelete(selectedChallenge.id, selectedChallenge.media_url)} 
-                    className="w-full text-red-400 text-[10px] font-black uppercase tracking-widest pt-4 border-t border-white/10"
-                  >
-                    🗑️ Elimina questa prova
-                  </button>
+                  
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => downloadPhoto(selectedChallenge.media_url, selectedChallenge.title)}
+                      className="flex-1 bg-blue-600 text-white py-3 rounded-xl font-bold uppercase text-[10px]"
+                    >💾 Scarica Foto</button>
+                    <button 
+                      onClick={() => handleDelete(selectedChallenge.id, selectedChallenge.media_url)} 
+                      className="flex-1 bg-red-600/20 text-red-400 py-3 rounded-xl border border-red-600/30 font-bold uppercase text-[10px]"
+                    >🗑️ Elimina</button>
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -202,8 +232,8 @@ export default function ChallengesPage() {
                     onChange={(e) => setCaption(e.target.value)}
                     value={caption}
                   />
-                  <label className="block w-full bg-yellow-400 text-purple-900 text-center py-5 rounded-2xl font-black cursor-pointer uppercase tracking-widest shadow-xl active:scale-95 transition-transform">
-                    📸 Carica Foto/Video
+                  <label className="block w-full bg-yellow-400 text-purple-900 text-center py-5 rounded-2xl font-black cursor-pointer uppercase tracking-widest active:scale-95 transition-transform">
+                    📸 Carica Prova
                     <input type="file" accept="image/*,video/*" capture="environment" className="hidden" onChange={(e) => handleUpload(e, selectedChallenge.id)} />
                   </label>
                 </div>
@@ -212,23 +242,31 @@ export default function ChallengesPage() {
           </div>
         )}
 
-        {/* GALLERIA DEI RICORDI */}
-        <div className="mt-20">
-          <h2 className="text-3xl font-black uppercase italic text-center mb-8 text-yellow-400">📸 Galleria Ricordi</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {/* GALLERIA DEI RICORDI (Si trasforma in Report in stampa) */}
+        <div className="mt-20 print:mt-0">
+          <h2 className="text-3xl font-black uppercase italic text-center mb-8 text-yellow-400 print:hidden">📸 Galleria Ricordi</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 print:grid-cols-1 print:gap-10">
             {challenges.filter(c => c.is_completed).map((completed) => (
-              <div key={`gallery-${completed.id}`} onClick={() => setSelectedChallenge(completed)} className="group relative rounded-xl overflow-hidden border border-white/10 aspect-square bg-black cursor-pointer">
-                <img src={completed.media_url} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity" alt="Ricordo" />
-                <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black text-[8px] uppercase font-bold truncate">
-                   {completed.caption || completed.title}
+              <div 
+                key={`gallery-${completed.id}`} 
+                className="group relative rounded-xl overflow-hidden border border-white/10 aspect-square bg-black cursor-pointer print:aspect-auto print:border-none print:bg-white print:text-black"
+              >
+                <img 
+                  src={completed.media_url} 
+                  className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-opacity print:opacity-100 print:rounded-2xl print:max-h-[400px] print:object-contain" 
+                  alt="Ricordo" 
+                />
+                <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black text-[8px] uppercase font-bold truncate print:relative print:bg-none print:text-lg print:from-transparent print:mt-4 print:text-center print:whitespace-normal">
+                   <span className="print:block print:text-2xl print:font-black">{completed.title}</span>
+                   {completed.caption && <p className="italic opacity-70 print:mt-2">"{completed.caption}"</p>}
                 </div>
               </div>
             ))}
           </div>
         </div>
         
-        <div className="mt-16 text-center">
-           <Link href="/" className="text-white/30 hover:text-white underline text-xs transition-opacity tracking-widest uppercase">
+        <div className="mt-16 text-center print:hidden">
+           <Link href="/" className="text-white/30 hover:text-white underline text-xs tracking-widest uppercase">
              ← Torna alla Home
            </Link>
         </div>
