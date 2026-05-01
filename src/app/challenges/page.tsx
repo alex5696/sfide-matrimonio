@@ -33,18 +33,6 @@ export default function ChallengesPage() {
     setLoading(false);
   }
 
-  // Funzione per i colori della difficoltà (mancava nel messaggio precedente!)
-  const getDiffColor = (diff: string) => {
-    switch(diff?.toLowerCase()) {
-      case 'facile': return 'bg-green-500';
-      case 'medio': return 'bg-yellow-500';
-      case 'difficile': return 'bg-orange-600';
-      case 'bonus': return 'bg-red-600 animate-pulse';
-      case 'leggendario': return 'bg-gradient-to-r from-yellow-400 via-white to-yellow-400 text-black';
-      default: return 'bg-white/20';
-    }
-  };
-
   const downloadPhoto = async (url: string, filename: string) => {
     try {
       const response = await fetch(url);
@@ -107,99 +95,110 @@ export default function ChallengesPage() {
         return sum + base + extra;
     }, 0);
 
-  const progressPercentage = targetPoints > 0 ? Math.min((currentPoints / targetPoints) * 100, 100) : 0;
+  // Calcolo percentuale (non limitata al 100% per la logica, ma limitata per la barra visiva)
+  const realPercentage = targetPoints > 0 ? (currentPoints / targetPoints) * 100 : 0;
+  const barWidth = Math.min(realPercentage, 100);
+
   const filteredChallenges = challenges.filter(c => {
     if (filter === "pending") return !c.is_completed;
     if (filter === "completed") return c.is_completed;
     return true;
   });
 
-  if (loading) return <div className="min-h-screen bg-purple-950 flex items-center justify-center text-white font-black uppercase tracking-tighter">Caricamento...</div>;
+  if (loading) return <div className="min-h-screen bg-[#0f0214] flex items-center justify-center text-white font-black uppercase tracking-widest animate-pulse">Caricamento sfide...</div>;
 
   return (
     <main className="min-h-screen bg-[#0f0214] text-white p-4 md:p-8 pb-20 print:bg-white print:text-black">
       <div className="max-w-4xl mx-auto">
         
         {/* HEADER & PROGRESS BAR */}
-        <div className="bg-gradient-to-b from-white/10 to-transparent p-6 rounded-[2.5rem] border border-white/10 mb-8 sticky top-4 z-20 backdrop-blur-2xl shadow-2xl print:hidden">
+        <div className="bg-white/5 p-6 rounded-[2.5rem] border border-white/10 mb-8 sticky top-4 z-20 backdrop-blur-2xl shadow-2xl print:hidden">
           <div className="flex justify-between items-end mb-4">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-fuchsia-400 mb-1">Punteggio Simone</p>
-              <p className="text-5xl font-black text-yellow-400 italic">
-                {currentPoints}<span className="text-lg opacity-30 not-italic ml-2">/ {targetPoints}</span>
-              </p>
+              <p className="text-[11px] font-black uppercase tracking-[0.2em] text-fuchsia-400 mb-1">Punteggio Simone</p>
+              <div className="flex items-baseline gap-2">
+                <p className="text-5xl font-black text-yellow-400 italic leading-none">{currentPoints}</p>
+                <p className="text-lg font-bold text-white/40">/ {targetPoints}</p>
+              </div>
             </div>
             <div className="text-right">
-                <p className="text-[10px] font-black uppercase opacity-40">Avanzamento</p>
-                <p className="text-xl font-black text-white">{Math.round(progressPercentage)}%</p>
+                <p className="text-[11px] font-black uppercase text-fuchsia-400 mb-1 tracking-widest">Status</p>
+                <p className={`text-2xl font-black ${realPercentage >= 100 ? 'text-green-400 animate-bounce' : 'text-white'}`}>
+                    {Math.round(realPercentage)}%
+                </p>
             </div>
           </div>
-          <div className="w-full bg-black/50 h-4 rounded-full overflow-hidden p-1 border border-white/5">
-            <div className="bg-gradient-to-r from-fuchsia-600 via-purple-500 to-yellow-400 h-full rounded-full transition-all duration-1000 shadow-[0_0_20px_rgba(192,38,211,0.5)]" style={{ width: `${progressPercentage}%` }}></div>
+          
+          <div className="w-full bg-black/50 h-5 rounded-full overflow-hidden p-1 border border-white/10">
+            <div 
+                className={`h-full rounded-full transition-all duration-1000 shadow-[0_0_20px_rgba(192,38,211,0.5)] ${realPercentage >= 100 ? 'bg-gradient-to-r from-yellow-400 via-green-400 to-yellow-400' : 'bg-gradient-to-r from-fuchsia-600 via-purple-500 to-yellow-400'}`} 
+                style={{ width: `${barWidth}%` }}
+            ></div>
           </div>
+          {realPercentage >= 100 && (
+            <p className="text-[10px] font-black uppercase text-center mt-3 text-yellow-400 tracking-[0.3em] animate-pulse">🏆 Livello Leggendario Sbloccato 🏆</p>
+          )}
         </div>
 
-        {/* CONTROLLI */}
-        <div className="flex gap-2 mb-8 overflow-x-auto pb-2 no-scrollbar print:hidden">
+        {/* FILTRI */}
+        <div className="flex gap-2 mb-10 overflow-x-auto pb-2 no-scrollbar print:hidden">
           {['all', 'pending', 'completed'].map((f) => (
-            <button key={f} onClick={() => setFilter(f)} className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all ${filter === f ? 'bg-yellow-400 text-black scale-105' : 'bg-white/5 border border-white/10 text-white/50'}`}>
+            <button key={f} onClick={() => setFilter(f)} className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${filter === f ? 'bg-white text-black scale-105 shadow-xl' : 'bg-white/5 border border-white/10 text-white'}`}>
               {f === 'all' ? 'Tutte' : f === 'pending' ? 'Da fare' : 'Fatte'}
             </button>
           ))}
-          <button onClick={() => window.print()} className="px-6 py-3 rounded-2xl text-[10px] font-black uppercase bg-white text-black ml-auto">Report PDF</button>
+          <button onClick={() => window.print()} className="px-6 py-3 rounded-2xl text-[10px] font-black uppercase bg-fuchsia-600 text-white ml-auto hover:bg-fuchsia-500 transition-colors">Report PDF</button>
         </div>
 
         {/* GRID SFIDE */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 print:hidden">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 print:hidden">
           {filteredChallenges.map((challenge) => (
             <div 
               key={challenge.id} 
               onClick={() => { setSelectedChallenge(challenge); setIsBonusSelected(challenge.bonus_achieved); }}
-              className={`p-6 rounded-[2rem] border transition-all hover:border-fuchsia-500/50 cursor-pointer ${
-                challenge.is_completed ? 'bg-green-500/10 border-green-500/30 opacity-70' : 'bg-white/5 border-white/10'
+              className={`p-7 rounded-[2rem] border-2 transition-all hover:scale-[1.02] cursor-pointer ${
+                challenge.is_completed 
+                ? 'bg-green-500/5 border-green-500/20 opacity-60' 
+                : 'bg-white/5 border-white/10 hover:border-fuchsia-500/50'
               }`}
             >
-              <div className="flex justify-between items-start mb-4">
-                <span className={`text-[9px] font-black uppercase px-2 py-1 rounded ${getDiffColor(challenge.difficulty)}`}>
-                  {challenge.difficulty || 'Facile'}
-                </span>
-                <div className="text-yellow-400 text-sm font-black">+{challenge.points} PT</div>
+              <div className="flex justify-between items-center mb-4">
+                <div className="text-yellow-400 text-lg font-black tracking-tighter">+{challenge.points} PT</div>
+                {challenge.is_completed && <span className="bg-green-500 text-[10px] font-black px-2 py-1 rounded text-white uppercase">Completata</span>}
               </div>
-              <h3 className="text-xl font-bold uppercase leading-tight tracking-tighter mb-2">{challenge.title}</h3>
+              <h3 className="text-2xl font-bold uppercase leading-tight tracking-tighter text-white mb-2">{challenge.title}</h3>
               {challenge.bonus_description && !challenge.is_completed && (
-                <p className="text-[9px] text-fuchsia-400 font-bold uppercase tracking-widest">⚡ Bonus Disponibile</p>
-              )}
-              {challenge.bonus_achieved && (
-                <p className="text-[9px] text-green-400 font-bold uppercase tracking-widest">✅ Bonus Sbloccato (+{challenge.bonus_points})</p>
+                <div className="inline-block bg-fuchsia-600/20 text-fuchsia-300 text-[9px] font-black px-2 py-1 rounded border border-fuchsia-600/30 uppercase tracking-widest">⚡ Bonus Disponibile</div>
               )}
             </div>
           ))}
         </div>
 
-        {/* MODALE */}
+        {/* MODALE (POP-UP) */}
         {selectedChallenge && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 print:hidden">
-            <div className="absolute inset-0 bg-black/90 backdrop-blur-md" onClick={() => setSelectedChallenge(null)}></div>
-            <div className="bg-[#1a0521] border border-white/10 w-full max-w-lg rounded-[3rem] p-8 relative z-10 shadow-2xl animate-in zoom-in duration-200">
-              <button onClick={() => setSelectedChallenge(null)} className="absolute top-6 right-8 text-white/20 hover:text-white text-3xl">✕</button>
+            <div className="absolute inset-0 bg-black/95 backdrop-blur-sm" onClick={() => setSelectedChallenge(null)}></div>
+            <div className="bg-[#1a0521] border border-white/20 w-full max-w-lg rounded-[3rem] p-8 relative z-10 shadow-2xl animate-in zoom-in duration-200">
+              <button onClick={() => setSelectedChallenge(null)} className="absolute top-6 right-8 text-white/50 hover:text-white text-3xl font-light">✕</button>
               
-              <h2 className="text-3xl font-black uppercase italic leading-none mb-4 text-yellow-400">{selectedChallenge.title}</h2>
-              <p className="text-lg text-white/70 mb-8 leading-snug">{selectedChallenge.descriptions}</p>
+              <h2 className="text-4xl font-black uppercase italic leading-none mb-4 text-yellow-400 drop-shadow-lg">{selectedChallenge.title}</h2>
+              <p className="text-lg text-white mb-8 leading-snug">{selectedChallenge.descriptions}</p>
 
+              {/* BOX BONUS */}
               {selectedChallenge.bonus_description && (
-                <div className={`p-5 rounded-2xl border-2 mb-8 transition-all ${isBonusSelected ? 'bg-fuchsia-600/20 border-fuchsia-500' : 'bg-black/40 border-white/5'}`}>
+                <div className={`p-6 rounded-2xl border-2 mb-8 transition-all ${isBonusSelected ? 'bg-fuchsia-600/30 border-fuchsia-500 shadow-[0_0_20px_rgba(192,38,211,0.2)]' : 'bg-black/40 border-white/10'}`}>
                    <div className="flex items-start gap-4">
                       <input 
                         type="checkbox" 
                         id="bonus"
                         checked={isBonusSelected}
                         onChange={(e) => setIsBonusSelected(e.target.checked)}
-                        className="w-6 h-6 rounded-lg mt-1 accent-fuchsia-500"
+                        className="w-7 h-7 rounded-lg mt-1 accent-fuchsia-500 cursor-pointer"
                         disabled={selectedChallenge.is_completed}
                       />
                       <label htmlFor="bonus" className="cursor-pointer">
-                        <p className="text-[10px] font-black uppercase text-fuchsia-400 mb-1">Obiettivo Bonus (+{selectedChallenge.bonus_points} PT)</p>
-                        <p className="text-sm font-bold text-white/90 leading-tight">{selectedChallenge.bonus_description}</p>
+                        <p className="text-[11px] font-black uppercase text-fuchsia-400 mb-1 tracking-widest">Obiettivo Extra (+{selectedChallenge.bonus_points} PT)</p>
+                        <p className="text-sm font-bold text-white leading-tight">{selectedChallenge.bonus_description}</p>
                       </label>
                    </div>
                 </div>
@@ -207,16 +206,19 @@ export default function ChallengesPage() {
 
               {selectedChallenge.is_completed ? (
                 <div className="space-y-6">
-                  <img src={selectedChallenge.media_url} className="w-full aspect-video object-cover rounded-[2rem]" alt="Prova" />
+                  <div className="rounded-[2rem] overflow-hidden border border-white/10 shadow-2xl">
+                    <img src={selectedChallenge.media_url} className="w-full aspect-video object-cover" alt="Prova" />
+                  </div>
+                  {selectedChallenge.caption && <p className="text-center italic text-fuchsia-200 text-lg">"{selectedChallenge.caption}"</p>}
                   <div className="flex gap-3">
-                    <button onClick={() => downloadPhoto(selectedChallenge.media_url, selectedChallenge.title)} className="flex-1 bg-white text-black py-4 rounded-2xl font-black uppercase text-xs">Salva</button>
-                    <button onClick={() => handleDelete(selectedChallenge.id, selectedChallenge.media_url)} className="px-6 bg-red-500/10 text-red-500 rounded-2xl font-black uppercase text-[10px]">Elimina</button>
+                    <button onClick={() => downloadPhoto(selectedChallenge.media_url, selectedChallenge.title)} className="flex-1 bg-white text-black py-5 rounded-2xl font-black uppercase text-xs tracking-[0.2em]">Salva Foto</button>
+                    <button onClick={() => handleDelete(selectedChallenge.id, selectedChallenge.media_url)} className="px-6 bg-red-600/10 text-red-500 rounded-2xl font-black uppercase text-[10px] border border-red-500/20">Elimina</button>
                   </div>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <input type="text" placeholder="Commento..." className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-fuchsia-500" onChange={(e) => setCaption(e.target.value)} value={caption} />
-                  <label className="block w-full bg-gradient-to-r from-fuchsia-600 to-purple-600 text-white text-center py-6 rounded-[2rem] font-black uppercase tracking-[0.2em] cursor-pointer shadow-xl">
+                  <input type="text" placeholder="Scrivi un commento..." className="w-full bg-white/5 border-2 border-white/10 p-5 rounded-2xl text-white outline-none focus:border-fuchsia-500 transition-all placeholder:text-white/20" onChange={(e) => setCaption(e.target.value)} value={caption} />
+                  <label className="block w-full bg-gradient-to-r from-fuchsia-600 to-purple-600 text-white text-center py-6 rounded-[2rem] font-black uppercase tracking-[0.2em] cursor-pointer shadow-xl active:scale-95 transition-transform">
                     📸 Carica Prova
                     <input type="file" accept="image/*,video/*" capture="environment" className="hidden" onChange={(e) => handleUpload(e, selectedChallenge.id)} />
                   </label>
@@ -226,21 +228,28 @@ export default function ChallengesPage() {
           </div>
         )}
 
-        {/* GALLERIA REPORT */}
-        <div className="mt-20 print:mt-0">
-            <h2 className="text-center font-black uppercase tracking-[0.4em] opacity-20 mb-10 print:hidden">Galleria dei Ricordi</h2>
+        {/* GALLERIA */}
+        <div className="mt-24 print:mt-0">
+            <h2 className="text-center font-black uppercase tracking-[0.5em] text-white/30 mb-12 print:hidden italic text-xl">The Hall of Fame</h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 print:grid-cols-1">
                 {challenges.filter(c => c.is_completed).map(c => (
-                    <div key={`gallery-${c.id}`} className="aspect-square rounded-[2rem] overflow-hidden relative group bg-white/5 print:aspect-auto print:mb-12">
-                        <img src={c.media_url} className="w-full h-full object-cover opacity-50 group-hover:opacity-100 transition-all print:opacity-100 print:rounded-3xl print:max-h-[500px]" />
-                        <div className="absolute inset-0 p-4 flex flex-col justify-end bg-gradient-to-t from-black/80 print:relative print:text-black print:bg-none">
-                            <p className="text-[10px] font-black uppercase text-yellow-400 print:text-2xl print:text-purple-700">{c.title}</p>
-                            {c.bonus_achieved && <p className="text-[8px] font-black uppercase text-fuchsia-400 print:text-lg">Bonus Sbloccato!</p>}
-                            {c.caption && <p className="text-[10px] italic opacity-70 print:text-xl print:text-gray-500">"{c.caption}"</p>}
+                    <div key={`gallery-${c.id}`} className="aspect-square rounded-[2rem] overflow-hidden relative group bg-white/5 border border-white/5 print:aspect-auto print:mb-12">
+                        <img src={c.media_url} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-all print:opacity-100 print:rounded-3xl print:max-h-[500px]" />
+                        <div className="absolute inset-0 p-5 flex flex-col justify-end bg-gradient-to-t from-black via-black/20 to-transparent print:relative print:text-black print:bg-none">
+                            <p className="text-[10px] font-black uppercase text-yellow-400 print:text-2xl print:text-purple-700 leading-tight mb-1">{c.title}</p>
+                            {c.bonus_achieved && <p className="text-[9px] font-black uppercase text-fuchsia-400 print:text-lg">Bonus Sbloccato!</p>}
+                            {c.caption && <p className="text-[11px] italic text-white/70 mt-1 print:text-xl print:text-gray-500 leading-tight">"{c.caption}"</p>}
                         </div>
                     </div>
                 ))}
             </div>
+        </div>
+
+        {/* TASTO HOME */}
+        <div className="mt-24 text-center print:hidden">
+           <Link href="/" className="inline-block bg-white/5 hover:bg-white/10 border border-white/10 px-10 py-4 rounded-full text-white/50 hover:text-white text-[10px] tracking-[0.4em] font-black uppercase transition-all shadow-lg">
+             ← Torna alla Home
+           </Link>
         </div>
 
       </div>
