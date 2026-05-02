@@ -1,9 +1,11 @@
 "use client";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase"; 
 import Link from 'next/link';
 
 export default function ChallengesPage() {
+  const router = useRouter();
   const [challenges, setChallenges] = useState<any[]>([]);
   const [targetPoints, setTargetPoints] = useState(1000); 
   const [loading, setLoading] = useState(true);
@@ -12,34 +14,31 @@ export default function ChallengesPage() {
   const [filter, setFilter] = useState("all"); 
   const [selectedChallenge, setSelectedChallenge] = useState<any>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  
-  // STATO PER I PERMESSI
   const [isAdmin, setIsAdmin] = useState(false);
-  const [userName, setUserName] = useState("");
 
   useEffect(() => {
-    fetchData();
+    // 1. Controllo "Buttafuori": se non c'è il nome, manda alla Home
+    const savedName = localStorage.getItem("userName");
+    if (!savedName) {
+      router.push("/");
+    } else {
+      fetchData(savedName);
+    }
   }, []);
 
-  async function fetchData() {
+  async function fetchData(username: string) {
     setLoading(true);
+
+    // 2. Controllo se l'utente è autorizzato
+    const { data: userData } = await supabase
+      .from("AuthorizedUsers")
+      .select("*")
+      .ilike("nome", username) 
+      .maybeSingle();
     
-    // 1. Recupero nome utente da localStorage
-    const savedName = localStorage.getItem("userName") || "";
-    setUserName(savedName);
+    setIsAdmin(!!userData);
 
-    // 2. Controllo se l'utente è nella tabella "AuthorizedUsers"
-    if (savedName) {
-      const { data: userData } = await supabase
-        .from("AuthorizedUsers")
-        .select("*")
-        .ilike("nome", savedName) 
-        .maybeSingle();
-      
-      if (userData) setIsAdmin(true);
-    }
-
-    // 3. Caricamento Sfide e Settings
+    // 3. Caricamento Dati
     const { data: challengesData } = await supabase
       .from("Challenges")
       .select("*")
@@ -80,10 +79,7 @@ export default function ChallengesPage() {
   };
 
   async function handleUpload(e: any, challengeId: number) {
-    if (!isAdmin) {
-      alert("⚠️ Modalità Ospite: non puoi caricare contenuti.");
-      return;
-    }
+    if (!isAdmin) return;
     const file = e.target.files[0];
     if (!file) return;
     const fileExt = file.name.split('.').pop();
@@ -105,7 +101,8 @@ export default function ChallengesPage() {
     setCaption(""); 
     setIsBonusSelected(false);
     setSelectedChallenge(null); 
-    fetchData();
+    const savedName = localStorage.getItem("userName") || "";
+    fetchData(savedName);
   }
 
   async function handleDelete(challengeId: number, mediaUrl: string) {
@@ -119,7 +116,9 @@ export default function ChallengesPage() {
         caption: null,
         bonus_achieved: false 
     }).eq('id', challengeId);
-    setSelectedChallenge(null); fetchData();
+    setSelectedChallenge(null); 
+    const savedName = localStorage.getItem("userName") || "";
+    fetchData(savedName);
   }
 
   const currentPoints = challenges
@@ -141,20 +140,19 @@ export default function ChallengesPage() {
     return true;
   });
 
-  if (loading) return <div className="min-h-screen bg-[#0f0214] flex items-center justify-center text-white font-black uppercase italic tracking-widest">Sincronizzazione in corso...</div>;
+  if (loading) return <div className="min-h-screen bg-[#0f0214] flex items-center justify-center text-white font-black uppercase italic tracking-widest">Sincronizzazione...</div>;
 
   return (
     <main className="min-h-screen bg-[#0f0214] text-white p-4 md:p-8 pb-20 print:bg-white print:text-black">
       <div className="max-w-4xl mx-auto">
         
-        {/* INDICATORE GUEST MODE */}
         {!isAdmin && (
           <div className="bg-yellow-500/20 text-yellow-400 text-[10px] font-black text-center py-2 rounded-full mb-4 border border-yellow-500/30 uppercase tracking-widest print:hidden">
             👀 Modalità Ospite (Sola Lettura)
           </div>
         )}
 
-        {/* PROGRESS BAR & SETTINGS */}
+        {/* PROGRESS BAR */}
         <div className="bg-white/5 p-6 rounded-[2.5rem] border border-white/20 mb-8 sticky top-4 z-30 backdrop-blur-3xl shadow-2xl print:hidden">
           <div className="flex justify-between items-start mb-4">
             <div>
@@ -175,7 +173,7 @@ export default function ChallengesPage() {
           </div>
 
           {isSettingsOpen && isAdmin && (
-            <div className="mb-6 p-6 bg-black/60 rounded-[1.5rem] border border-fuchsia-500/30 animate-in fade-in zoom-in duration-200">
+            <div className="mb-6 p-6 bg-black/60 rounded-[1.5rem] border border-fuchsia-500/30">
                 <p className="text-[10px] font-black uppercase text-fuchsia-400 mb-4 tracking-widest text-center">Regola il Traguardo</p>
                 <div className="flex flex-col gap-4">
                     <input type="range" min="100" max="2000" step="5" value={targetPoints} onChange={(e) => updateTargetPoints(parseInt(e.target.value))} className="w-full accent-fuchsia-500" />
@@ -197,7 +195,7 @@ export default function ChallengesPage() {
           </div>
         </div>
 
-        {/* MESSAGGI DI CONGRATULAZIONI (Solo se settings è chiuso) */}
+        {/* MESSAGGI */}
         {!isSettingsOpen && (
           <div className="space-y-4 mb-8 print:hidden">
             {allCompleted ? (
@@ -214,7 +212,7 @@ export default function ChallengesPage() {
           </div>
         )}
 
-        {/* FILTRI E TASTO REPORT */}
+        {/* FILTRI */}
         <div className="flex flex-wrap gap-2 mb-10 print:hidden">
           {['all', 'pending', 'completed'].map((f) => (
             <button key={f} onClick={() => setFilter(f)} className={`px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${filter === f ? 'bg-white text-black scale-105' : 'bg-white/10 border border-white/10'}`}>
@@ -224,7 +222,7 @@ export default function ChallengesPage() {
           <button onClick={() => window.print()} className="px-5 py-3 rounded-2xl text-[10px] font-black uppercase bg-green-600 text-white ml-auto shadow-lg">📄 Report PDF</button>
         </div>
 
-        {/* GRID DELLE SFIDE */}
+        {/* GRID SFIDE */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 print:hidden">
           {filteredChallenges.map((challenge) => (
             <div 
@@ -242,7 +240,7 @@ export default function ChallengesPage() {
           ))}
         </div>
 
-        {/* POP-UP DETTAGLI */}
+        {/* POP-UP */}
         {selectedChallenge && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 print:hidden">
             <div className="absolute inset-0 bg-black/90 backdrop-blur-md" onClick={() => setSelectedChallenge(null)}></div>
@@ -290,7 +288,7 @@ export default function ChallengesPage() {
           </div>
         )}
 
-        {/* GALLERIA RICORDI */}
+        {/* GALLERIA */}
         <div className="mt-20 print:mt-0">
           <h2 className="text-3xl font-black uppercase italic text-center mb-8 text-yellow-400 print:hidden">📸 Galleria Ricordi</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 print:grid-cols-1 print:gap-12">
@@ -299,17 +297,3 @@ export default function ChallengesPage() {
                 <img src={completed.media_url} className="w-full h-full object-cover opacity-80 print:opacity-100 print:max-h-[500px] print:object-contain print:rounded-3xl" alt="Ricordo" />
                 <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black text-[10px] uppercase font-bold print:relative print:text-black print:bg-none print:text-center print:text-xl print:mt-4">
                    <p className="print:text-2xl print:font-black">{completed.title}</p>
-                   {completed.caption && <p className="italic opacity-70 print:mt-2">"{completed.caption}"</p>}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-        
-        <div className="mt-20 text-center print:hidden">
-           <Link href="/" className="text-white/20 hover:text-white underline text-xs uppercase tracking-widest">← Torna alla Home</Link>
-        </div>
-      </div>
-    </main>
-  );
-}
