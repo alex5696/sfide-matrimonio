@@ -53,7 +53,6 @@ export default function ChallengesPage() {
   const realPercentage = targetPoints > 0 ? (currentPoints / targetPoints) * 100 : 0;
   const barWidth = Math.min(realPercentage, 100);
   
-  // LOGICA CELEBRAZIONI: "Muta" durante l'editing del target
   useEffect(() => {
     if (loading || challenges.length === 0 || isSettingsOpen) return;
     
@@ -174,4 +173,77 @@ export default function ChallengesPage() {
         {/* MODALE DETTAGLIO */}
         {selectedChallenge && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-black/95 backdrop-blur-md" onClick={() => setSelectedChallenge
+            <div className="absolute inset-0 bg-black/95 backdrop-blur-md" onClick={() => setSelectedChallenge(null)}></div>
+            <div className="bg-[#1a0521] border border-white/20 w-full max-w-lg rounded-[3.5rem] p-8 relative z-10 shadow-2xl animate-in zoom-in duration-200">
+              <button onClick={() => setSelectedChallenge(null)} className="absolute top-8 right-10 text-white/30 text-3xl">✕</button>
+              <h2 className="text-4xl font-black uppercase italic leading-none mb-4 text-yellow-400">{selectedChallenge.title}</h2>
+              <p className="text-xl text-white/80 mb-8">{selectedChallenge.descriptions}</p>
+
+              {selectedChallenge.bonus_description && (
+                <div className={`p-6 rounded-[2rem] border-2 mb-8 transition-all ${isBonusSelected ? 'bg-fuchsia-600/30 border-fuchsia-400' : 'bg-black/40 border-white/10'}`}>
+                   <div className="flex items-start gap-4">
+                      <input type="checkbox" id="bonus" checked={isBonusSelected} onChange={(e) => setIsBonusSelected(e.target.checked)} className="w-8 h-8 rounded-xl mt-1 accent-fuchsia-500 cursor-pointer" disabled={selectedChallenge.is_completed} />
+                      <label htmlFor="bonus" className="cursor-pointer">
+                        <p className="text-[11px] font-black uppercase text-fuchsia-300 mb-1 tracking-widest italic">🎯 Extra (+{selectedChallenge.bonus_points} PT)</p>
+                        <p className="text-md font-bold text-white leading-tight">{selectedChallenge.bonus_description}</p>
+                      </label>
+                   </div>
+                </div>
+              )}
+
+              {selectedChallenge.is_completed ? (
+                <div className="space-y-6">
+                  <div className="rounded-[2.5rem] overflow-hidden border border-white/10"><img src={selectedChallenge.media_url} className="w-full aspect-video object-cover" /></div>
+                  <div className="flex gap-4">
+                    <button onClick={() => handleDelete(selectedChallenge.id, selectedChallenge.media_url)} className="flex-1 bg-red-600/10 text-red-500 py-4 rounded-[1.5rem] font-black uppercase text-[10px] border border-red-500/20">Elimina Prova</button>
+                    <button onClick={() => setSelectedChallenge(null)} className="flex-1 bg-white text-black py-4 rounded-[1.5rem] font-black uppercase text-[10px]">Chiudi</button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-5">
+                  <input type="text" placeholder="Scrivi un commento..." className="w-full bg-white/5 border-2 border-white/10 p-6 rounded-[1.5rem] text-white outline-none focus:border-fuchsia-500 text-lg" onChange={(e) => setCaption(e.target.value)} value={caption} />
+                  <label className="block w-full bg-gradient-to-r from-fuchsia-600 to-purple-600 text-white text-center py-7 rounded-[2rem] font-black uppercase tracking-[0.3em] cursor-pointer shadow-2xl active:scale-95 transition-all text-sm"> 📸 Carica Prova <input type="file" accept="image/*,video/*" capture="environment" className="hidden" onChange={(e) => handleUpload(e, selectedChallenge.id)} /> </label>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* --- POPUP 1: TARGET RAGGIUNTO --- */}
+        {showTargetModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/90 backdrop-blur-xl" onClick={() => setShowTargetModal(false)}></div>
+            <div className="bg-white text-black w-full max-w-md rounded-[3rem] p-12 relative z-10 text-center shadow-2xl animate-in zoom-in duration-300">
+               <div className="text-6xl mb-6">💍</div>
+               <h2 className="text-4xl font-black uppercase italic leading-[0.9] mb-6 tracking-tighter">MISSIONE COMPIUTA</h2>
+               <p className="text-xl font-bold opacity-80 mb-10 leading-tight italic text-fuchsia-600">
+                 "adesso sei pronto per sposarti (forse)"
+               </p>
+               <button onClick={() => setShowTargetModal(false)} className="w-full bg-black text-white py-6 rounded-full font-black uppercase tracking-widest hover:scale-105 transition-transform shadow-xl">CONTINUA LA SFIDA</button>
+            </div>
+          </div>
+        )}
+
+        {/* --- POPUP 2: HERO MODAL --- */}
+        {showHeroModal && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-yellow-500/95 backdrop-blur-2xl" onClick={() => setShowHeroModal(false)}></div>
+            <div className="bg-black text-white w-full max-w-md rounded-[4rem] p-12 relative z-10 text-center shadow-2xl animate-in zoom-in duration-300 border-4 border-white/20">
+               <div className="text-7xl mb-6 animate-bounce text-white">🏆</div>
+               <h2 className="text-6xl font-black uppercase italic leading-[0.85] mb-8 tracking-tighter text-yellow-400">YOU ARE A HERO</h2>
+               <div className="bg-white/10 p-8 rounded-3xl mb-10 border border-white/20">
+                  <p className="text-2xl font-bold italic leading-tight text-white">"In occasione dell'ultimo pranzo, non pagherai nulla"</p>
+               </div>
+               <button onClick={() => setShowHeroModal(false)} className="w-full bg-yellow-400 text-black py-6 rounded-full font-black uppercase tracking-widest shadow-2xl active:scale-95 transition-all">GODITI IL PREMIO</button>
+            </div>
+          </div>
+        )}
+
+        <div className="mt-32 text-center">
+           <Link href="/" className="inline-block bg-white/10 hover:bg-white text-white hover:text-black border border-white/20 px-12 py-5 rounded-full text-[10px] tracking-[0.5em] font-black uppercase transition-all shadow-2xl"> ← Home Page </Link>
+        </div>
+
+      </div>
+    </main>
+  );
+}
