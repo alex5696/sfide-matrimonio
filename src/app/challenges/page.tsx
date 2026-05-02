@@ -35,11 +35,11 @@ export default function ChallengesPage() {
   }
 
   async function updateTargetPoints(newVal: number) {
-    setTargetPoints(newVal);
-    await supabase.from("Settings").update({ target_points: newVal }).eq('id', 1);
+    const value = isNaN(newVal) ? 0 : newVal;
+    setTargetPoints(value);
+    await supabase.from("Settings").update({ target_points: value }).eq('id', 1);
   }
 
-  // FUNZIONE DOWNLOAD FOTO
   const downloadPhoto = async (url: string, filename: string) => {
     try {
       const response = await fetch(url);
@@ -105,6 +105,10 @@ export default function ChallengesPage() {
   const realPercentage = targetPoints > 0 ? (currentPoints / targetPoints) * 100 : 0;
   const barWidth = Math.min(realPercentage, 100);
 
+  // LOGICA MESSAGGI DI VITTORIA
+  const allCompleted = challenges.length > 0 && challenges.every(c => c.is_completed);
+  const targetReached = realPercentage >= 100;
+
   const filteredChallenges = challenges.filter(c => {
     if (filter === "pending") return !c.is_completed;
     if (filter === "completed") return c.is_completed;
@@ -117,7 +121,7 @@ export default function ChallengesPage() {
     <main className="min-h-screen bg-[#0f0214] text-white p-4 md:p-8 pb-20 print:bg-white print:text-black">
       <div className="max-w-4xl mx-auto">
         
-        {/* PROGRESS BAR & SETTINGS (Nasconde in stampa) */}
+        {/* PROGRESS BAR & SETTINGS */}
         <div className="bg-white/5 p-6 rounded-[2.5rem] border border-white/20 mb-8 sticky top-4 z-30 backdrop-blur-3xl shadow-2xl print:hidden">
           <div className="flex justify-between items-start mb-4">
             <div>
@@ -127,59 +131,97 @@ export default function ChallengesPage() {
                 <p className="text-xl font-bold text-white/50">/ {targetPoints}</p>
               </div>
             </div>
-            <button onClick={() => setIsSettingsOpen(!isSettingsOpen)} className="bg-white/10 p-3 rounded-2xl border border-white/10">⚙️</button>
+            <button 
+              onClick={() => setIsSettingsOpen(!isSettingsOpen)} 
+              className={`p-3 rounded-2xl border transition-all ${isSettingsOpen ? 'bg-fuchsia-600 border-white' : 'bg-white/10 border-white/10'}`}
+            >
+              ⚙️
+            </button>
           </div>
 
           {isSettingsOpen && (
-            <div className="mb-6 p-6 bg-black/60 rounded-[1.5rem] border border-fuchsia-500/30">
+            <div className="mb-6 p-6 bg-black/60 rounded-[1.5rem] border border-fuchsia-500/30 animate-in fade-in zoom-in duration-200">
                 <p className="text-[10px] font-black uppercase text-fuchsia-400 mb-4 tracking-widest text-center">Regola il Traguardo</p>
-                <div className="flex items-center gap-4">
-                    <input type="range" min="100" max="2000" step="50" value={targetPoints} onChange={(e) => updateTargetPoints(parseInt(e.target.value))} className="flex-1 accent-fuchsia-500" />
-                    <span className="text-xl font-black text-white w-16 text-right">{targetPoints}</span>
+                <div className="flex flex-col gap-4">
+                    <input 
+                      type="range" 
+                      min="100" 
+                      max="2000" 
+                      step="5" 
+                      value={targetPoints} 
+                      onChange={(e) => updateTargetPoints(parseInt(e.target.value))} 
+                      className="w-full accent-fuchsia-500" 
+                    />
+                    <div className="flex justify-center items-center gap-2">
+                      <span className="text-xs font-bold opacity-50 uppercase">Inserisci manuale:</span>
+                      <input 
+                        type="number" 
+                        value={targetPoints} 
+                        onChange={(e) => updateTargetPoints(parseInt(e.target.value))}
+                        className="bg-white/10 border border-white/20 rounded-lg px-3 py-1 w-24 text-center font-black text-yellow-400 focus:outline-none focus:border-fuchsia-500"
+                      />
+                    </div>
                 </div>
             </div>
           )}
           
           <div className="w-full bg-black/50 h-5 rounded-full overflow-hidden p-1 border border-white/20">
-            <div className={`h-full rounded-full transition-all duration-1000 ${realPercentage >= 100 ? 'bg-green-400' : 'bg-fuchsia-600'}`} style={{ width: `${barWidth}%` }}></div>
+            <div className={`h-full rounded-full transition-all duration-1000 ${targetReached ? 'bg-gradient-to-r from-yellow-400 to-green-400' : 'bg-fuchsia-600'}`} style={{ width: `${barWidth}%` }}></div>
           </div>
         </div>
 
-        {/* FILTRI E TASTO REPORT (Nasconde in stampa) */}
+        {/* MESSAGGI DI CONGRATULAZIONI (Solo se settings è chiuso) */}
+        {!isSettingsOpen && (
+          <div className="space-y-4 mb-8 print:hidden">
+            {allCompleted ? (
+              <div className="bg-gradient-to-r from-yellow-400 to-orange-500 text-black p-8 rounded-[2.5rem] text-center border-4 border-white animate-bounce shadow-[0_0_40px_rgba(250,204,21,0.4)]">
+                <h2 className="text-4xl font-black uppercase italic italic leading-tight">🏆 YOU ARE A HERO</h2>
+                <p className="font-bold text-lg mt-2">Adesso tutti quei bastardi ti offriranno cena e drink! 🍻</p>
+              </div>
+            ) : targetReached ? (
+              <div className="bg-fuchsia-600 text-white p-8 rounded-[2.5rem] text-center border-4 border-white shadow-2xl">
+                <h2 className="text-3xl font-black uppercase">🔥 MISSIONE COMPIUTA</h2>
+                <p className="font-bold mt-2">Adesso puoi finalmente sposarti! (forse) 💍</p>
+              </div>
+            ) : null}
+          </div>
+        )}
+
+        {/* FILTRI E TASTO REPORT */}
         <div className="flex flex-wrap gap-2 mb-10 print:hidden">
           {['all', 'pending', 'completed'].map((f) => (
-            <button key={f} onClick={() => setFilter(f)} className={`px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest ${filter === f ? 'bg-white text-black' : 'bg-white/10'}`}>
+            <button key={f} onClick={() => setFilter(f)} className={`px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${filter === f ? 'bg-white text-black scale-105' : 'bg-white/10 border border-white/10'}`}>
               {f === 'all' ? 'Tutte' : f === 'pending' ? 'Da fare' : 'Fatte'}
             </button>
           ))}
-          <button onClick={() => window.print()} className="px-5 py-3 rounded-2xl text-[10px] font-black uppercase bg-green-600 text-white ml-auto shadow-lg">📄 Report PDF</button>
+          <button onClick={() => window.print()} className="px-5 py-3 rounded-2xl text-[10px] font-black uppercase bg-green-600 text-white ml-auto shadow-lg hover:bg-green-500">📄 Report PDF</button>
         </div>
 
         {/* INTESTAZIONE SOLO PER STAMPA */}
         <div className="hidden print:block text-center mb-10 border-b-2 border-black pb-4 text-black">
           <h1 className="text-4xl font-black uppercase">Report Sfide Matrimonio</h1>
-          <p className="text-xl">Simone ha totalizzato {currentPoints} punti!</p>
+          <p className="text-xl">Simone ha totalizzato {currentPoints} punti su un traguardo di {targetPoints}!</p>
         </div>
 
-        {/* GRID DELLE SFIDE (Nasconde in stampa) */}
+        {/* GRID DELLE SFIDE */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 print:hidden">
           {filteredChallenges.map((challenge) => (
             <div 
               key={challenge.id} 
               onClick={() => { setSelectedChallenge(challenge); setIsBonusSelected(challenge.bonus_achieved); }}
-              className={`p-6 rounded-[2rem] border-2 transition-all ${challenge.is_completed ? 'bg-green-500/10 border-green-500/30' : 'bg-white/5 border-white/10'}`}
+              className={`p-6 rounded-[2rem] border-2 transition-all hover:border-fuchsia-500/50 cursor-pointer ${challenge.is_completed ? 'bg-green-500/10 border-green-500/30' : 'bg-white/5 border-white/10'}`}
             >
               <div className="flex justify-between items-center mb-2">
                 <span className="text-yellow-400 font-black">+{challenge.points} PT</span>
-                {challenge.is_completed && <span className="text-green-400 font-bold">COMPLETATA ✅</span>}
+                {challenge.is_completed && <span className="text-green-400 font-bold">✅</span>}
               </div>
               <h2 className="text-xl font-bold uppercase truncate">{challenge.title}</h2>
-              <p className="text-[10px] opacity-40 mt-2">CLICCA PER DETTAGLI →</p>
+              <p className="text-[10px] opacity-40 mt-2">DETTAGLI →</p>
             </div>
           ))}
         </div>
 
-        {/* POP-UP DETTAGLI (Nasconde in stampa) */}
+        {/* POP-UP DETTAGLI */}
         {selectedChallenge && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 print:hidden">
             <div className="absolute inset-0 bg-black/90 backdrop-blur-md" onClick={() => setSelectedChallenge(null)}></div>
@@ -202,7 +244,7 @@ export default function ChallengesPage() {
                   <input type="text" placeholder="Didascalia..." className="w-full bg-black/40 border border-white/10 p-5 rounded-2xl outline-none" onChange={(e) => setCaption(e.target.value)} value={caption} />
                   {selectedChallenge.bonus_points > 0 && (
                     <div onClick={() => setIsBonusSelected(!isBonusSelected)} className={`p-4 rounded-2xl border-2 cursor-pointer transition-all ${isBonusSelected ? 'bg-yellow-400 text-black border-white' : 'bg-white/5 border-white/10'}`}>
-                      <p className="text-[10px] font-black uppercase">🔥 Bonus Extra (+{selectedChallenge.bonus_points} PT)</p>
+                      <p className="text-[10px] font-black uppercase">🔥 Bonus (+{selectedChallenge.bonus_points} PT)</p>
                       <p className="text-xs">{selectedChallenge.bonus_description}</p>
                     </div>
                   )}
@@ -216,7 +258,7 @@ export default function ChallengesPage() {
           </div>
         )}
 
-        {/* GALLERIA / REPORT (In stampa diventa la lista dei risultati) */}
+        {/* GALLERIA RICORDI */}
         <div className="mt-20 print:mt-0">
           <h2 className="text-3xl font-black uppercase italic text-center mb-8 text-yellow-400 print:hidden">📸 Galleria Ricordi</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 print:grid-cols-1 print:gap-12">
