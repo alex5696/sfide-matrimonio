@@ -4,6 +4,13 @@ import { supabase } from "../../lib/supabase";
 import Link from 'next/link';
 
 export default function ChallengesPage() {
+  // Stato Login
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userRole, setUserRole] = useState<"admin" | "guest">("guest");
+  const [loginName, setLoginName] = useState("");
+  const [isChecking, setIsChecking] = useState(false);
+
+  // Stato App
   const [challenges, setChallenges] = useState<any[]>([]);
   const [targetPoints, setTargetPoints] = useState(1000); 
   const [settingsId, setSettingsId] = useState<number | null>(null);
@@ -13,13 +20,38 @@ export default function ChallengesPage() {
   const [filter, setFilter] = useState("all"); 
   const [selectedChallenge, setSelectedChallenge] = useState<any>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-
   const [showTargetModal, setShowTargetModal] = useState(false);
   const [showHeroModal, setShowHeroModal] = useState(false);
 
   useEffect(() => {
+    // Controllo sessione esistente
+    const savedRole = sessionStorage.getItem("userRole");
+    if (savedRole) {
+      setUserRole(savedRole as "admin" | "guest");
+      setIsLoggedIn(true);
+    }
     fetchData();
   }, []);
+
+  async function handleLogin() {
+    setIsChecking(true);
+    // Verifichiamo se il nome esiste nella tabella AuthorizedUsers
+    const { data } = await supabase
+      .from("AuthorizedUsers")
+      .select("*")
+      .eq("nome", loginName.trim()) // Assicurati che la colonna si chiami "nome"
+      .maybeSingle();
+
+    if (data) {
+      sessionStorage.setItem("userRole", "admin");
+      setUserRole("admin");
+    } else {
+      sessionStorage.setItem("userRole", "guest");
+      setUserRole("guest");
+    }
+    setIsLoggedIn(true);
+    setIsChecking(false);
+  }
 
   async function fetchData() {
     setLoading(true);
@@ -35,6 +67,7 @@ export default function ChallengesPage() {
   }
 
   async function updateTargetPoints(newVal: number) {
+    if (userRole !== "admin") return; // Sicurezza extra
     const value = Math.max(0, Math.min(1500, newVal)); 
     setTargetPoints(value);
     if (settingsId) {
@@ -54,7 +87,7 @@ export default function ChallengesPage() {
   const barWidth = Math.min(realPercentage, 100);
   
   useEffect(() => {
-    if (loading || challenges.length === 0 || isSettingsOpen) return;
+    if (loading || challenges.length === 0 || isSettingsOpen || !isLoggedIn) return;
     
     const allDone = challenges.every(c => c.is_completed);
     
@@ -64,9 +97,10 @@ export default function ChallengesPage() {
     } else if (realPercentage >= 100) {
       setShowTargetModal(true);
     }
-  }, [currentPoints, challenges, realPercentage, loading, isSettingsOpen]);
+  }, [currentPoints, challenges, realPercentage, loading, isSettingsOpen, isLoggedIn]);
 
   async function handleUpload(e: any, challengeId: number) {
+    if (userRole !== "admin") return;
     const file = e.target.files[0];
     if (!file) return;
     const fileExt = file.name.split('.').pop();
@@ -83,6 +117,7 @@ export default function ChallengesPage() {
   }
 
   async function handleDelete(challengeId: number, mediaUrl: string) {
+    if (userRole !== "admin") return;
     if (!confirm("Vuoi eliminare questa prova?")) return;
     const fileName = mediaUrl.split('/').pop();
     if (fileName) await supabase.storage.from('media').remove([fileName]);
@@ -98,6 +133,31 @@ export default function ChallengesPage() {
     return true;
   });
 
+  // --- UI LOGIN (GATE) ---
+  if (!isLoggedIn) {
+      return (
+          <div className="min-h-screen bg-[#0f0214] flex flex-col items-center justify-center p-6 text-white text-center">
+              <div className="bg-white/5 border border-white/10 p-10 rounded-[3rem] w-full max-w-sm backdrop-blur-xl">
+                  <h1 className="text-4xl font-black mb-2 italic">CHI SEI?</h1>
+                  <p className="text-white/50 mb-8 text-sm">Inserisci il tuo nome per entrare</p>
+                  <input 
+                    className="w-full bg-black/50 border-2 border-white/10 p-4 rounded-2xl mb-6 text-center text-xl font-black outline-none focus:border-fuchsia-500"
+                    placeholder="Il tuo nome..."
+                    value={loginName}
+                    onChange={(e) => setLoginName(e.target.value)}
+                  />
+                  <button 
+                    onClick={handleLogin} 
+                    disabled={isChecking}
+                    className="w-full bg-gradient-to-r from-fuchsia-600 to-purple-600 py-4 rounded-2xl font-black uppercase tracking-widest hover:scale-105 transition-all shadow-xl"
+                  >
+                    {isChecking ? "Verifica..." : "Accedi"}
+                  </button>
+              </div>
+          </div>
+      );
+  }
+
   if (loading) return <div className="min-h-screen bg-[#0f0214] flex items-center justify-center text-white font-black uppercase tracking-widest italic animate-pulse">Sync in corso...</div>;
 
   return (
@@ -108,16 +168,18 @@ export default function ChallengesPage() {
         <div className="bg-white/5 p-6 rounded-[2.5rem] border border-white/20 mb-8 sticky top-4 z-30 backdrop-blur-3xl shadow-2xl">
           <div className="flex justify-between items-start mb-4">
             <div>
-              <p className="text-[12px] font-black uppercase tracking-[0.2em] text-fuchsia-400 mb-1">Punteggio Simone</p>
+              <p className="text-[12px] font-black uppercase tracking-[0.2em] text-fuchsia-400 mb-1">Punteggio Simone {userRole === 'guest' && <span className="text-white/30 ml-2">(Guest Mode)</span>}</p>
               <div className="flex items-baseline gap-2">
                 <p className="text-6xl font-black text-yellow-400 italic leading-none">{currentPoints}</p>
                 <p className="text-xl font-bold text-white/30">/ {targetPoints}</p>
               </div>
             </div>
-            <button onClick={() => setIsSettingsOpen(!isSettingsOpen)} className="bg-white/10 p-3 rounded-2xl border border-white/10 text-xl hover:bg-white/20 transition-all">⚙️</button>
+            {userRole === "admin" && (
+                <button onClick={() => setIsSettingsOpen(!isSettingsOpen)} className="bg-white/10 p-3 rounded-2xl border border-white/10 text-xl hover:bg-white/20 transition-all">⚙️</button>
+            )}
           </div>
 
-          {isSettingsOpen && (
+          {userRole === "admin" && isSettingsOpen && (
             <div className="mb-6 p-6 bg-black/90 rounded-[1.5rem] border border-fuchsia-500/50 animate-in slide-in-from-top-4">
                 <p className="text-[10px] font-black uppercase text-fuchsia-400 mb-4 tracking-widest text-center">Configura il Traguardo (Max 1500)</p>
                 <div className="flex items-center gap-4">
@@ -182,7 +244,7 @@ export default function ChallengesPage() {
               {selectedChallenge.bonus_description && (
                 <div className={`p-6 rounded-[2rem] border-2 mb-8 transition-all ${isBonusSelected ? 'bg-fuchsia-600/30 border-fuchsia-400' : 'bg-black/40 border-white/10'}`}>
                    <div className="flex items-start gap-4">
-                      <input type="checkbox" id="bonus" checked={isBonusSelected} onChange={(e) => setIsBonusSelected(e.target.checked)} className="w-8 h-8 rounded-xl mt-1 accent-fuchsia-500 cursor-pointer" disabled={selectedChallenge.is_completed} />
+                      <input type="checkbox" id="bonus" checked={isBonusSelected} onChange={(e) => setIsBonusSelected(e.target.checked)} className="w-8 h-8 rounded-xl mt-1 accent-fuchsia-500 cursor-pointer" disabled={selectedChallenge.is_completed || userRole === "guest"} />
                       <label htmlFor="bonus" className="cursor-pointer">
                         <p className="text-[11px] font-black uppercase text-fuchsia-300 mb-1 tracking-widest italic">🎯 Extra (+{selectedChallenge.bonus_points} PT)</p>
                         <p className="text-md font-bold text-white leading-tight">{selectedChallenge.bonus_description}</p>
@@ -195,15 +257,19 @@ export default function ChallengesPage() {
                 <div className="space-y-6">
                   <div className="rounded-[2.5rem] overflow-hidden border border-white/10"><img src={selectedChallenge.media_url} className="w-full aspect-video object-cover" /></div>
                   <div className="flex gap-4">
-                    <button onClick={() => handleDelete(selectedChallenge.id, selectedChallenge.media_url)} className="flex-1 bg-red-600/10 text-red-500 py-4 rounded-[1.5rem] font-black uppercase text-[10px] border border-red-500/20">Elimina Prova</button>
+                    {userRole === "admin" && (
+                        <button onClick={() => handleDelete(selectedChallenge.id, selectedChallenge.media_url)} className="flex-1 bg-red-600/10 text-red-500 py-4 rounded-[1.5rem] font-black uppercase text-[10px] border border-red-500/20">Elimina Prova</button>
+                    )}
                     <button onClick={() => setSelectedChallenge(null)} className="flex-1 bg-white text-black py-4 rounded-[1.5rem] font-black uppercase text-[10px]">Chiudi</button>
                   </div>
                 </div>
               ) : (
-                <div className="space-y-5">
-                  <input type="text" placeholder="Scrivi un commento..." className="w-full bg-white/5 border-2 border-white/10 p-6 rounded-[1.5rem] text-white outline-none focus:border-fuchsia-500 text-lg" onChange={(e) => setCaption(e.target.value)} value={caption} />
-                  <label className="block w-full bg-gradient-to-r from-fuchsia-600 to-purple-600 text-white text-center py-7 rounded-[2rem] font-black uppercase tracking-[0.3em] cursor-pointer shadow-2xl active:scale-95 transition-all text-sm"> 📸 Carica Prova <input type="file" accept="image/*,video/*" capture="environment" className="hidden" onChange={(e) => handleUpload(e, selectedChallenge.id)} /> </label>
-                </div>
+                userRole === "admin" && (
+                    <div className="space-y-5">
+                      <input type="text" placeholder="Scrivi un commento..." className="w-full bg-white/5 border-2 border-white/10 p-6 rounded-[1.5rem] text-white outline-none focus:border-fuchsia-500 text-lg" onChange={(e) => setCaption(e.target.value)} value={caption} />
+                      <label className="block w-full bg-gradient-to-r from-fuchsia-600 to-purple-600 text-white text-center py-7 rounded-[2rem] font-black uppercase tracking-[0.3em] cursor-pointer shadow-2xl active:scale-95 transition-all text-sm"> 📸 Carica Prova <input type="file" accept="image/*,video/*" capture="environment" className="hidden" onChange={(e) => handleUpload(e, selectedChallenge.id)} /> </label>
+                    </div>
+                )
               )}
             </div>
           </div>
