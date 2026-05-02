@@ -1,9 +1,13 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { supabase } from "../../lib/supabase"; 
 import Link from 'next/link';
+import { jsPDF } from "jspdf";
+import html2canvas from "html2canvas";
 
 export default function ChallengesPage() {
+  const printRef = useRef<HTMLDivElement>(null);
+
   // Stato Login
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userRole, setUserRole] = useState<"admin" | "guest">("guest");
@@ -24,7 +28,6 @@ export default function ChallengesPage() {
   const [showHeroModal, setShowHeroModal] = useState(false);
 
   useEffect(() => {
-    // Controllo sessione esistente
     const savedRole = sessionStorage.getItem("userRole");
     if (savedRole) {
       setUserRole(savedRole as "admin" | "guest");
@@ -33,19 +36,26 @@ export default function ChallengesPage() {
     fetchData();
   }, []);
 
+  // --- FUNZIONALITÀ PDF ---
+  const handleDownloadPDF = async () => {
+    const element = printRef.current;
+    if (!element) return;
+    const canvas = await html2canvas(element, { scale: 2, backgroundColor: "#0f0214" });
+    const imgData = canvas.toDataURL('image/png');
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+    pdf.save("report-sfide-simone.pdf");
+  };
+
   async function handleLogin() {
     setIsChecking(true);
-    
-    // Cerchiamo nel DB usando .ilike per ignorare maiuscole/minuscole
     const { data, error } = await supabase
       .from("AuthorizedUsers")
       .select("*")
       .ilike("nome", loginName.trim()) 
       .maybeSingle();
-
-    if (error) {
-      console.error("Errore Supabase:", error.message);
-    }
 
     if (data) {
       sessionStorage.setItem("userRole", "admin");
@@ -94,9 +104,7 @@ export default function ChallengesPage() {
   
   useEffect(() => {
     if (loading || challenges.length === 0 || isSettingsOpen || !isLoggedIn) return;
-    
     const allDone = challenges.every(c => c.is_completed);
-    
     if (allDone) {
       setShowHeroModal(true);
       setShowTargetModal(false);
@@ -144,18 +152,13 @@ export default function ChallengesPage() {
           <div className="min-h-screen bg-[#0f0214] flex flex-col items-center justify-center p-6 text-white text-center">
               <div className="bg-white/5 border border-white/10 p-10 rounded-[3rem] w-full max-w-sm backdrop-blur-xl">
                   <h1 className="text-4xl font-black mb-2 italic">CHI SEI?</h1>
-                  <p className="text-white/50 mb-8 text-sm">Inserisci il tuo nome per entrare</p>
                   <input 
                     className="w-full bg-black/50 border-2 border-white/10 p-4 rounded-2xl mb-6 text-center text-xl font-black outline-none focus:border-fuchsia-500"
                     placeholder="Il tuo nome..."
                     value={loginName}
                     onChange={(e) => setLoginName(e.target.value)}
                   />
-                  <button 
-                    onClick={handleLogin} 
-                    disabled={isChecking}
-                    className="w-full bg-gradient-to-r from-fuchsia-600 to-purple-600 py-4 rounded-2xl font-black uppercase tracking-widest hover:scale-105 transition-all shadow-xl"
-                  >
+                  <button onClick={handleLogin} disabled={isChecking} className="w-full bg-gradient-to-r from-fuchsia-600 to-purple-600 py-4 rounded-2xl font-black uppercase tracking-widest hover:scale-105 transition-all shadow-xl">
                     {isChecking ? "Verifica..." : "Accedi"}
                   </button>
               </div>
@@ -166,14 +169,14 @@ export default function ChallengesPage() {
   if (loading) return <div className="min-h-screen bg-[#0f0214] flex items-center justify-center text-white font-black uppercase tracking-widest italic animate-pulse">Sync in corso...</div>;
 
   return (
-    <main className="min-h-screen bg-[#0f0214] text-white p-4 md:p-8 pb-20 relative">
+    <main ref={printRef} className="min-h-screen bg-[#0f0214] text-white p-4 md:p-8 pb-20 relative">
       <div className="max-w-4xl mx-auto">
         
         {/* HEADER & PROGRESS */}
         <div className="bg-white/5 p-6 rounded-[2.5rem] border border-white/20 mb-8 sticky top-4 z-30 backdrop-blur-3xl shadow-2xl">
           <div className="flex justify-between items-start mb-4">
             <div>
-              <p className="text-[12px] font-black uppercase tracking-[0.2em] text-fuchsia-400 mb-1">Punteggio Simone {userRole === 'guest' && <span className="text-white/30 ml-2">(Guest Mode)</span>}</p>
+              <p className="text-[12px] font-black uppercase tracking-[0.2em] text-fuchsia-400 mb-1">Punteggio Simone</p>
               <div className="flex items-baseline gap-2">
                 <p className="text-6xl font-black text-yellow-400 italic leading-none">{currentPoints}</p>
                 <p className="text-xl font-bold text-white/30">/ {targetPoints}</p>
@@ -185,34 +188,31 @@ export default function ChallengesPage() {
           </div>
 
           {userRole === "admin" && isSettingsOpen && (
-            <div className="mb-6 p-6 bg-black/90 rounded-[1.5rem] border border-fuchsia-500/50 animate-in slide-in-from-top-4">
-                <p className="text-[10px] font-black uppercase text-fuchsia-400 mb-4 tracking-widest text-center">Configura il Traguardo (Max 1500)</p>
+            <div className="mb-6 p-6 bg-black/90 rounded-[1.5rem] border border-fuchsia-500/50">
+                <button onClick={handleDownloadPDF} className="w-full mb-4 bg-white text-black font-black py-2 rounded-lg text-xs uppercase tracking-widest hover:bg-yellow-400 transition-all">📸 SCARICA REPORT PDF</button>
                 <div className="flex items-center gap-4">
-                    <input 
-                        type="range" min="100" max="1500" step="5" 
-                        value={targetPoints} 
-                        onChange={(e) => updateTargetPoints(parseInt(e.target.value))} 
-                        className="flex-1 accent-fuchsia-500 h-2 bg-white/10 rounded-lg appearance-none cursor-pointer" 
-                    />
-                    <input 
-                        type="number" 
-                        value={targetPoints} 
-                        onChange={(e) => updateTargetPoints(parseInt(e.target.value) || 0)}
-                        className="w-20 bg-white/10 border border-white/20 text-center p-2 rounded-lg font-black text-yellow-400 outline-none focus:border-fuchsia-500"
-                    />
+                    <input type="range" min="100" max="1500" step="5" value={targetPoints} onChange={(e) => updateTargetPoints(parseInt(e.target.value))} className="flex-1 accent-fuchsia-500 h-2 bg-white/10 rounded-lg appearance-none cursor-pointer" />
                 </div>
             </div>
           )}
           
-          <div className="w-full bg-black/50 h-6 rounded-full overflow-hidden p-1 border border-white/10">
+          <div className="w-full bg-black/50 h-6 rounded-full overflow-hidden p-1 border border-white/10 mb-6">
             <div className={`h-full rounded-full transition-all duration-1000 ${realPercentage >= 100 ? 'bg-gradient-to-r from-yellow-400 via-green-400 to-yellow-400' : 'bg-gradient-to-r from-fuchsia-600 via-purple-500 to-yellow-400'}`} style={{ width: `${barWidth}%` }}></div>
           </div>
-          <div className="flex justify-between items-center mt-4">
-             <p className={`text-[12px] font-black uppercase tracking-[0.2em] ${realPercentage >= 100 ? 'text-green-400' : 'text-fuchsia-400'}`}>
-                {realPercentage >= 100 ? "👑 LIVELLO SPOSO" : "🔥 ROAD TO WEDDING"}
-             </p>
-             <p className="text-2xl font-black text-white italic">{Math.round(realPercentage)}%</p>
-          </div>
+
+          {/* VERA HALL OF FAME (Galleria) */}
+          {challenges.filter(c => c.is_completed).length > 0 && (
+            <div className="border-t border-white/10 pt-6">
+              <h3 className="text-sm font-black italic mb-4 text-fuchsia-400 uppercase tracking-widest">🏆 Hall of Fame</h3>
+              <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
+                {challenges.filter(c => c.is_completed).map((c) => (
+                  <div key={c.id} className="bg-black rounded-xl overflow-hidden aspect-square border border-white/10">
+                    <img src={c.media_url} className="w-full h-full object-cover" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* FILTRI */}
@@ -280,40 +280,32 @@ export default function ChallengesPage() {
           </div>
         )}
 
-        {/* --- POPUP 1: TARGET RAGGIUNTO --- */}
+        {/* MODALI TARGET/HERO */}
         {showTargetModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/90 backdrop-blur-xl" onClick={() => setShowTargetModal(false)}></div>
             <div className="bg-white text-black w-full max-w-md rounded-[3rem] p-12 relative z-10 text-center shadow-2xl animate-in zoom-in duration-300">
                <div className="text-6xl mb-6">💍</div>
                <h2 className="text-4xl font-black uppercase italic leading-[0.9] mb-6 tracking-tighter">MISSIONE COMPIUTA</h2>
-               <p className="text-xl font-bold opacity-80 mb-10 leading-tight italic text-fuchsia-600">
-                 "adesso sei pronto per sposarti (forse)"
-               </p>
-               <button onClick={() => setShowTargetModal(false)} className="w-full bg-black text-white py-6 rounded-full font-black uppercase tracking-widest hover:scale-105 transition-transform shadow-xl">CONTINUA LA SFIDA</button>
+               <button onClick={() => setShowTargetModal(false)} className="w-full bg-black text-white py-6 rounded-full font-black uppercase tracking-widest hover:scale-105 transition-transform shadow-xl">CONTINUA</button>
             </div>
           </div>
         )}
 
-        {/* --- POPUP 2: HERO MODAL --- */}
         {showHeroModal && (
           <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-yellow-500/95 backdrop-blur-2xl" onClick={() => setShowHeroModal(false)}></div>
             <div className="bg-black text-white w-full max-w-md rounded-[4rem] p-12 relative z-10 text-center shadow-2xl animate-in zoom-in duration-300 border-4 border-white/20">
                <div className="text-7xl mb-6 animate-bounce text-white">🏆</div>
                <h2 className="text-6xl font-black uppercase italic leading-[0.85] mb-8 tracking-tighter text-yellow-400">YOU ARE A HERO</h2>
-               <div className="bg-white/10 p-8 rounded-3xl mb-10 border border-white/20">
-                  <p className="text-2xl font-bold italic leading-tight text-white">"In occasione dell'ultimo pranzo, non pagherai nulla"</p>
-               </div>
                <button onClick={() => setShowHeroModal(false)} className="w-full bg-yellow-400 text-black py-6 rounded-full font-black uppercase tracking-widest shadow-2xl active:scale-95 transition-all">GODITI IL PREMIO</button>
             </div>
           </div>
         )}
 
         <div className="mt-32 text-center">
-           <Link href="/" className="inline-block bg-white/10 hover:bg-white text-white hover:text-black border border-white/20 px-12 py-5 rounded-full text-[10px] tracking-[0.5em] font-black uppercase transition-all shadow-2xl"> ← Home Page </Link>
+            <Link href="/" className="inline-block bg-white/10 hover:bg-white text-white hover:text-black border border-white/20 px-12 py-5 rounded-full text-[10px] tracking-[0.5em] font-black uppercase transition-all shadow-2xl"> ← Home Page </Link>
         </div>
-
       </div>
     </main>
   );
