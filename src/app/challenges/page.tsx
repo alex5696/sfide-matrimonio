@@ -35,21 +35,27 @@ export default function ChallengesPage() {
 
   async function handleLogin() {
     setIsChecking(true);
-    // Verifichiamo se il nome esiste nella tabella AuthorizedUsers
-    const { data } = await supabase
+    
+    // Cerchiamo nel DB usando .ilike per ignorare maiuscole/minuscole
+    const { data, error } = await supabase
       .from("AuthorizedUsers")
       .select("*")
-      .eq("nome", loginName.trim()) // Assicurati che la colonna si chiami "nome"
+      .ilike("nome", loginName.trim()) 
       .maybeSingle();
+
+    if (error) {
+      console.error("Errore Supabase:", error.message);
+    }
 
     if (data) {
       sessionStorage.setItem("userRole", "admin");
       setUserRole("admin");
+      setIsLoggedIn(true);
     } else {
       sessionStorage.setItem("userRole", "guest");
       setUserRole("guest");
+      setIsLoggedIn(true);
     }
-    setIsLoggedIn(true);
     setIsChecking(false);
   }
 
@@ -67,7 +73,7 @@ export default function ChallengesPage() {
   }
 
   async function updateTargetPoints(newVal: number) {
-    if (userRole !== "admin") return; // Sicurezza extra
+    if (userRole !== "admin") return;
     const value = Math.max(0, Math.min(1500, newVal)); 
     setTargetPoints(value);
     if (settingsId) {
@@ -133,7 +139,6 @@ export default function ChallengesPage() {
     return true;
   });
 
-  // --- UI LOGIN (GATE) ---
   if (!isLoggedIn) {
       return (
           <div className="min-h-screen bg-[#0f0214] flex flex-col items-center justify-center p-6 text-white text-center">
