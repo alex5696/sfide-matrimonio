@@ -297,3 +297,17 @@ export default function ChallengesPage() {
                 <img src={completed.media_url} className="w-full h-full object-cover opacity-80 print:opacity-100 print:max-h-[500px] print:object-contain print:rounded-3xl" alt="Ricordo" />
                 <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black text-[10px] uppercase font-bold print:relative print:text-black print:bg-none print:text-center print:text-xl print:mt-4">
                    <p className="print:text-2xl print:font-black">{completed.title}</p>
+                   {completed.caption && <p className="italic opacity-70 print:mt-2">"{completed.caption}"</p>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        
+        <div className="mt-20 text-center print:hidden">
+           <Link href="/" className="text-white/20 hover:text-white underline text-xs uppercase tracking-widest">← Torna alla Home</Link>
+        </div>
+      </div>
+    </main>
+  );
+}
