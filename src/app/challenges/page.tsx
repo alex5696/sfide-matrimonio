@@ -1,11 +1,9 @@
 "use client";
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase"; 
 import Link from 'next/link';
 
 export default function ChallengesPage() {
-  const router = useRouter();
   const [challenges, setChallenges] = useState<any[]>([]);
   const [targetPoints, setTargetPoints] = useState(1000); 
   const [loading, setLoading] = useState(true);
@@ -14,31 +12,13 @@ export default function ChallengesPage() {
   const [filter, setFilter] = useState("all"); 
   const [selectedChallenge, setSelectedChallenge] = useState<any>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
-    // 1. Controllo "Buttafuori": se non c'è il nome, manda alla Home
-    const savedName = localStorage.getItem("userName");
-    if (!savedName) {
-      router.push("/");
-    } else {
-      fetchData(savedName);
-    }
+    fetchData();
   }, []);
 
-  async function fetchData(username: string) {
+  async function fetchData() {
     setLoading(true);
-
-    // 2. Controllo se l'utente è autorizzato
-    const { data: userData } = await supabase
-      .from("AuthorizedUsers")
-      .select("*")
-      .ilike("nome", username) 
-      .maybeSingle();
-    
-    setIsAdmin(!!userData);
-
-    // 3. Caricamento Dati
     const { data: challengesData } = await supabase
       .from("Challenges")
       .select("*")
@@ -51,12 +31,10 @@ export default function ChallengesPage() {
 
     if (challengesData) setChallenges(challengesData);
     if (settingsData?.target_points) setTargetPoints(settingsData.target_points);
-    
     setLoading(false);
   }
 
   async function updateTargetPoints(newVal: number) {
-    if (!isAdmin) return;
     const value = isNaN(newVal) ? 0 : newVal;
     setTargetPoints(value);
     await supabase.from("Settings").update({ target_points: value }).eq('id', 1);
@@ -79,7 +57,6 @@ export default function ChallengesPage() {
   };
 
   async function handleUpload(e: any, challengeId: number) {
-    if (!isAdmin) return;
     const file = e.target.files[0];
     if (!file) return;
     const fileExt = file.name.split('.').pop();
@@ -101,12 +78,10 @@ export default function ChallengesPage() {
     setCaption(""); 
     setIsBonusSelected(false);
     setSelectedChallenge(null); 
-    const savedName = localStorage.getItem("userName") || "";
-    fetchData(savedName);
+    fetchData();
   }
 
   async function handleDelete(challengeId: number, mediaUrl: string) {
-    if (!isAdmin) return;
     if (!confirm("Vuoi davvero eliminare questa prova?")) return;
     const fileName = mediaUrl.split('/').pop();
     if (fileName) { await supabase.storage.from('media').remove([fileName]); }
@@ -116,9 +91,7 @@ export default function ChallengesPage() {
         caption: null,
         bonus_achieved: false 
     }).eq('id', challengeId);
-    setSelectedChallenge(null); 
-    const savedName = localStorage.getItem("userName") || "";
-    fetchData(savedName);
+    setSelectedChallenge(null); fetchData();
   }
 
   const currentPoints = challenges
@@ -131,6 +104,8 @@ export default function ChallengesPage() {
 
   const realPercentage = targetPoints > 0 ? (currentPoints / targetPoints) * 100 : 0;
   const barWidth = Math.min(realPercentage, 100);
+
+  // LOGICA MESSAGGI DI VITTORIA
   const allCompleted = challenges.length > 0 && challenges.every(c => c.is_completed);
   const targetReached = realPercentage >= 100;
 
@@ -140,19 +115,13 @@ export default function ChallengesPage() {
     return true;
   });
 
-  if (loading) return <div className="min-h-screen bg-[#0f0214] flex items-center justify-center text-white font-black uppercase italic tracking-widest">Sincronizzazione...</div>;
+  if (loading) return <div className="min-h-screen bg-[#0f0214] flex items-center justify-center text-white font-black uppercase italic tracking-widest">Sync in corso...</div>;
 
   return (
     <main className="min-h-screen bg-[#0f0214] text-white p-4 md:p-8 pb-20 print:bg-white print:text-black">
       <div className="max-w-4xl mx-auto">
         
-        {!isAdmin && (
-          <div className="bg-yellow-500/20 text-yellow-400 text-[10px] font-black text-center py-2 rounded-full mb-4 border border-yellow-500/30 uppercase tracking-widest print:hidden">
-            👀 Modalità Ospite (Sola Lettura)
-          </div>
-        )}
-
-        {/* PROGRESS BAR */}
+        {/* PROGRESS BAR & SETTINGS */}
         <div className="bg-white/5 p-6 rounded-[2.5rem] border border-white/20 mb-8 sticky top-4 z-30 backdrop-blur-3xl shadow-2xl print:hidden">
           <div className="flex justify-between items-start mb-4">
             <div>
@@ -162,23 +131,29 @@ export default function ChallengesPage() {
                 <p className="text-xl font-bold text-white/50">/ {targetPoints}</p>
               </div>
             </div>
-            {isAdmin && (
-              <button 
-                onClick={() => setIsSettingsOpen(!isSettingsOpen)} 
-                className={`p-3 rounded-2xl border transition-all ${isSettingsOpen ? 'bg-fuchsia-600 border-white' : 'bg-white/10 border-white/10'}`}
-              >
-                ⚙️
-              </button>
-            )}
+            <button 
+              onClick={() => setIsSettingsOpen(!isSettingsOpen)} 
+              className={`p-3 rounded-2xl border transition-all ${isSettingsOpen ? 'bg-fuchsia-600 border-white' : 'bg-white/10 border-white/10'}`}
+            >
+              ⚙️
+            </button>
           </div>
 
-          {isSettingsOpen && isAdmin && (
-            <div className="mb-6 p-6 bg-black/60 rounded-[1.5rem] border border-fuchsia-500/30">
+          {isSettingsOpen && (
+            <div className="mb-6 p-6 bg-black/60 rounded-[1.5rem] border border-fuchsia-500/30 animate-in fade-in zoom-in duration-200">
                 <p className="text-[10px] font-black uppercase text-fuchsia-400 mb-4 tracking-widest text-center">Regola il Traguardo</p>
                 <div className="flex flex-col gap-4">
-                    <input type="range" min="100" max="2000" step="5" value={targetPoints} onChange={(e) => updateTargetPoints(parseInt(e.target.value))} className="w-full accent-fuchsia-500" />
+                    <input 
+                      type="range" 
+                      min="100" 
+                      max="2000" 
+                      step="5" 
+                      value={targetPoints} 
+                      onChange={(e) => updateTargetPoints(parseInt(e.target.value))} 
+                      className="w-full accent-fuchsia-500" 
+                    />
                     <div className="flex justify-center items-center gap-2">
-                      <span className="text-xs font-bold opacity-50 uppercase">Manuale:</span>
+                      <span className="text-xs font-bold opacity-50 uppercase">Inserisci manuale:</span>
                       <input 
                         type="number" 
                         value={targetPoints} 
@@ -195,12 +170,12 @@ export default function ChallengesPage() {
           </div>
         </div>
 
-        {/* MESSAGGI */}
+        {/* MESSAGGI DI CONGRATULAZIONI (Solo se settings è chiuso) */}
         {!isSettingsOpen && (
           <div className="space-y-4 mb-8 print:hidden">
             {allCompleted ? (
               <div className="bg-gradient-to-r from-yellow-400 to-orange-500 text-black p-8 rounded-[2.5rem] text-center border-4 border-white animate-bounce shadow-[0_0_40px_rgba(250,204,21,0.4)]">
-                <h2 className="text-4xl font-black uppercase italic leading-tight">🏆 YOU ARE A HERO</h2>
+                <h2 className="text-4xl font-black uppercase italic italic leading-tight">🏆 YOU ARE A HERO</h2>
                 <p className="font-bold text-lg mt-2">Adesso tutti quei bastardi ti offriranno cena e drink! 🍻</p>
               </div>
             ) : targetReached ? (
@@ -212,17 +187,23 @@ export default function ChallengesPage() {
           </div>
         )}
 
-        {/* FILTRI */}
+        {/* FILTRI E TASTO REPORT */}
         <div className="flex flex-wrap gap-2 mb-10 print:hidden">
           {['all', 'pending', 'completed'].map((f) => (
             <button key={f} onClick={() => setFilter(f)} className={`px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${filter === f ? 'bg-white text-black scale-105' : 'bg-white/10 border border-white/10'}`}>
               {f === 'all' ? 'Tutte' : f === 'pending' ? 'Da fare' : 'Fatte'}
             </button>
           ))}
-          <button onClick={() => window.print()} className="px-5 py-3 rounded-2xl text-[10px] font-black uppercase bg-green-600 text-white ml-auto shadow-lg">📄 Report PDF</button>
+          <button onClick={() => window.print()} className="px-5 py-3 rounded-2xl text-[10px] font-black uppercase bg-green-600 text-white ml-auto shadow-lg hover:bg-green-500">📄 Report PDF</button>
         </div>
 
-        {/* GRID SFIDE */}
+        {/* INTESTAZIONE SOLO PER STAMPA */}
+        <div className="hidden print:block text-center mb-10 border-b-2 border-black pb-4 text-black">
+          <h1 className="text-4xl font-black uppercase">Report Sfide Matrimonio</h1>
+          <p className="text-xl">Simone ha totalizzato {currentPoints} punti su un traguardo di {targetPoints}!</p>
+        </div>
+
+        {/* GRID DELLE SFIDE */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 print:hidden">
           {filteredChallenges.map((challenge) => (
             <div 
@@ -240,7 +221,7 @@ export default function ChallengesPage() {
           ))}
         </div>
 
-        {/* POP-UP */}
+        {/* POP-UP DETTAGLI */}
         {selectedChallenge && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 print:hidden">
             <div className="absolute inset-0 bg-black/90 backdrop-blur-md" onClick={() => setSelectedChallenge(null)}></div>
@@ -255,40 +236,29 @@ export default function ChallengesPage() {
                   {selectedChallenge.caption && <p className="italic text-center text-fuchsia-200">"{selectedChallenge.caption}"</p>}
                   <div className="flex gap-2">
                     <button onClick={() => downloadPhoto(selectedChallenge.media_url, selectedChallenge.title)} className="flex-1 bg-blue-600 py-4 rounded-2xl font-black text-[10px] uppercase">💾 Scarica</button>
-                    {isAdmin && (
-                      <button onClick={() => handleDelete(selectedChallenge.id, selectedChallenge.media_url)} className="flex-1 bg-red-600/20 text-red-400 py-4 rounded-2xl border border-red-600/30 font-black text-[10px] uppercase">🗑️ Elimina</button>
-                    )}
+                    <button onClick={() => handleDelete(selectedChallenge.id, selectedChallenge.media_url)} className="flex-1 bg-red-600/20 text-red-400 py-4 rounded-2xl border border-red-600/30 font-black text-[10px] uppercase">🗑️ Elimina</button>
                   </div>
                 </div>
               ) : (
                 <div className="space-y-6">
-                  {isAdmin ? (
-                    <>
-                      <input type="text" placeholder="Didascalia..." className="w-full bg-black/40 border border-white/10 p-5 rounded-2xl outline-none focus:border-fuchsia-500" onChange={(e) => setCaption(e.target.value)} value={caption} />
-                      {selectedChallenge.bonus_points > 0 && (
-                        <div onClick={() => setIsBonusSelected(!isBonusSelected)} className={`p-4 rounded-2xl border-2 cursor-pointer transition-all ${isBonusSelected ? 'bg-yellow-400 text-black border-white' : 'bg-white/5 border-white/10'}`}>
-                          <p className="text-[10px] font-black uppercase">🔥 Bonus (+{selectedChallenge.bonus_points} PT)</p>
-                          <p className="text-xs">{selectedChallenge.bonus_description}</p>
-                        </div>
-                      )}
-                      <label className="block w-full bg-white text-black text-center py-5 rounded-2xl font-black cursor-pointer uppercase hover:bg-fuchsia-100">
-                        📸 Carica Prova
-                        <input type="file" accept="image/*,video/*" capture="environment" className="hidden" onChange={(e) => handleUpload(e, selectedChallenge.id)} />
-                      </label>
-                    </>
-                  ) : (
-                    <div className="text-center p-6 bg-white/5 rounded-2xl border border-white/10">
-                      <p className="text-yellow-400 font-bold uppercase text-sm">Sola Lettura</p>
-                      <p className="text-xs opacity-50 mt-2">Solo gli utenti autorizzati possono caricare prove.</p>
+                  <input type="text" placeholder="Didascalia..." className="w-full bg-black/40 border border-white/10 p-5 rounded-2xl outline-none" onChange={(e) => setCaption(e.target.value)} value={caption} />
+                  {selectedChallenge.bonus_points > 0 && (
+                    <div onClick={() => setIsBonusSelected(!isBonusSelected)} className={`p-4 rounded-2xl border-2 cursor-pointer transition-all ${isBonusSelected ? 'bg-yellow-400 text-black border-white' : 'bg-white/5 border-white/10'}`}>
+                      <p className="text-[10px] font-black uppercase">🔥 Bonus (+{selectedChallenge.bonus_points} PT)</p>
+                      <p className="text-xs">{selectedChallenge.bonus_description}</p>
                     </div>
                   )}
+                  <label className="block w-full bg-white text-black text-center py-5 rounded-2xl font-black cursor-pointer uppercase">
+                    📸 Carica Prova
+                    <input type="file" accept="image/*,video/*" capture="environment" className="hidden" onChange={(e) => handleUpload(e, selectedChallenge.id)} />
+                  </label>
                 </div>
               )}
             </div>
           </div>
         )}
 
-        {/* GALLERIA */}
+        {/* GALLERIA RICORDI */}
         <div className="mt-20 print:mt-0">
           <h2 className="text-3xl font-black uppercase italic text-center mb-8 text-yellow-400 print:hidden">📸 Galleria Ricordi</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 print:grid-cols-1 print:gap-12">
