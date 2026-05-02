@@ -34,10 +34,12 @@ export default function ChallengesPage() {
     setLoading(false);
   }
 
+  // Funzione aggiornata per accettare input manuale
   async function updateTargetPoints(newVal: number) {
-    setTargetPoints(newVal);
+    const value = Math.max(0, Math.min(1500, newVal)); // Limita tra 0 e 1500
+    setTargetPoints(value);
     if (settingsId) {
-      await supabase.from("Settings").update({ target_points: newVal }).eq('id', settingsId);
+      await supabase.from("Settings").update({ target_points: value }).eq('id', settingsId);
     }
   }
 
@@ -111,15 +113,26 @@ export default function ChallengesPage() {
                 <p className="text-xl font-bold text-white/30">/ {targetPoints}</p>
               </div>
             </div>
-            <button onClick={() => setIsSettingsOpen(!isSettingsOpen)} className="bg-white/10 p-3 rounded-2xl border border-white/10 text-xl">⚙️</button>
+            <button onClick={() => setIsSettingsOpen(!isSettingsOpen)} className="bg-white/10 p-3 rounded-2xl border border-white/10 text-xl hover:bg-white/20 transition-all">⚙️</button>
           </div>
 
+          {/* PANEL SETTINGS - MODIFICATO CON INPUT MANUALE */}
           {isSettingsOpen && (
             <div className="mb-6 p-6 bg-black/90 rounded-[1.5rem] border border-fuchsia-500/50 animate-in slide-in-from-top-4">
-                <p className="text-[10px] font-black uppercase text-fuchsia-400 mb-4 tracking-widest text-center">Modifica Traguardo (Max 1500)</p>
+                <p className="text-[10px] font-black uppercase text-fuchsia-400 mb-4 tracking-widest text-center">Configura il Traguardo (Max 1500)</p>
                 <div className="flex items-center gap-4">
-                    <input type="range" min="100" max="1500" step="50" value={targetPoints} onChange={(e) => updateTargetPoints(parseInt(e.target.value))} className="flex-1 accent-fuchsia-500 h-2 bg-white/10 rounded-lg appearance-none cursor-pointer" />
-                    <span className="text-2xl font-black text-white w-16 text-right">{targetPoints}</span>
+                    <input 
+                        type="range" min="100" max="1500" step="5" 
+                        value={targetPoints} 
+                        onChange={(e) => updateTargetPoints(parseInt(e.target.value))} 
+                        className="flex-1 accent-fuchsia-500 h-2 bg-white/10 rounded-lg appearance-none cursor-pointer" 
+                    />
+                    <input 
+                        type="number" 
+                        value={targetPoints} 
+                        onChange={(e) => updateTargetPoints(parseInt(e.target.value) || 0)}
+                        className="w-20 bg-white/10 border border-white/20 text-center p-2 rounded-lg font-black text-yellow-400 outline-none focus:border-fuchsia-500"
+                    />
                 </div>
             </div>
           )}
@@ -135,16 +148,7 @@ export default function ChallengesPage() {
           </div>
         </div>
 
-        {/* FILTRI */}
-        <div className="flex gap-2 mb-10 overflow-x-auto pb-2 no-scrollbar">
-          {['all', 'pending', 'completed'].map((f) => (
-            <button key={f} onClick={() => setFilter(f)} className={`px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${filter === f ? 'bg-white text-black' : 'bg-white/10 text-white'}`}>
-              {f === 'all' ? 'Tutte' : f === 'pending' ? 'Da fare' : 'Fatte'}
-            </button>
-          ))}
-        </div>
-
-        {/* GRID SFIDE */}
+        {/* LISTA SFIDE */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
           {filteredChallenges.map((challenge) => (
             <div key={challenge.id} onClick={() => { setSelectedChallenge(challenge); setIsBonusSelected(challenge.bonus_achieved); }} className={`p-8 rounded-[2.5rem] border-2 transition-all hover:scale-[1.02] cursor-pointer ${challenge.is_completed ? 'bg-green-500/5 border-green-500/30 opacity-60' : 'bg-white/5 border-white/10'}`}>
@@ -167,7 +171,7 @@ export default function ChallengesPage() {
               <p className="text-xl text-white/80 mb-8">{selectedChallenge.descriptions}</p>
 
               {selectedChallenge.bonus_description && (
-                <div className={`p-6 rounded-[2rem] border-2 mb-8 transition-all ${isBonusSelected ? 'bg-fuchsia-600/30 border-fuchsia-400 shadow-[0_0_20px_rgba(192,38,211,0.2)]' : 'bg-black/40 border-white/10'}`}>
+                <div className={`p-6 rounded-[2rem] border-2 mb-8 transition-all ${isBonusSelected ? 'bg-fuchsia-600/30 border-fuchsia-400' : 'bg-black/40 border-white/10'}`}>
                    <div className="flex items-start gap-4">
                       <input type="checkbox" id="bonus" checked={isBonusSelected} onChange={(e) => setIsBonusSelected(e.target.checked)} className="w-8 h-8 rounded-xl mt-1 accent-fuchsia-500 cursor-pointer" disabled={selectedChallenge.is_completed} />
                       <label htmlFor="bonus" className="cursor-pointer">
@@ -196,7 +200,7 @@ export default function ChallengesPage() {
           </div>
         )}
 
-        {/* --- POPUP 1: TARGET RAGGIUNTO (MARRIAGE VERSION) --- */}
+        {/* --- POPUP 1: TARGET RAGGIUNTO --- */}
         {showTargetModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/90 backdrop-blur-xl" onClick={() => setShowTargetModal(false)}></div>
@@ -211,7 +215,7 @@ export default function ChallengesPage() {
           </div>
         )}
 
-        {/* --- POPUP 2: HERO MODAL (TUTTE LE SFIDE) --- */}
+        {/* --- POPUP 2: HERO MODAL --- */}
         {showHeroModal && (
           <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-yellow-500/95 backdrop-blur-2xl" onClick={() => setShowHeroModal(false)}></div>
@@ -226,7 +230,6 @@ export default function ChallengesPage() {
           </div>
         )}
 
-        {/* TASTO HOME */}
         <div className="mt-32 text-center">
            <Link href="/" className="inline-block bg-white/10 hover:bg-white text-white hover:text-black border border-white/20 px-12 py-5 rounded-full text-[10px] tracking-[0.5em] font-black uppercase transition-all shadow-2xl"> ← Home Page </Link>
         </div>
