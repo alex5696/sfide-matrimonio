@@ -1,29 +1,84 @@
-import Link from 'next/link';
+"use client";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { supabase } from "../lib/supabase"; 
 
-export default function Home() {
+export default function HomePage() {
+  const router = useRouter();
+  const [weddingDate, setWeddingDate] = useState("2026-06-20T00:00:00");
+  const [isMounted, setIsMounted] = useState(false); // Per evitare errori di sincronizzazione client/server
+  const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+
+  useEffect(() => {
+    setIsMounted(true); // Segnala che siamo sul client
+    async function fetchSettings() {
+      const { data } = await supabase.from("Settings").select("wedding_date").maybeSingle();
+      if (data?.wedding_date) {
+        setWeddingDate(data.wedding_date);
+      }
+    }
+    fetchSettings();
+  }, []);
+
+  useEffect(() => {
+    if (!isMounted) return;
+
+    const interval = setInterval(() => {
+      const target = new Date(weddingDate).getTime();
+      const now = new Date().getTime();
+      const diff = target - now;
+
+      if (diff > 0) {
+        setTimeLeft({
+          days: Math.floor(diff / (1000 * 60 * 60 * 24)),
+          hours: Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
+          minutes: Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60)),
+          seconds: Math.floor((diff % (1000 * 60)) / 1000),
+        });
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [weddingDate, isMounted]);
+
+  // Se non è ancora montato sul client, non mostriamo il countdown (evita lo sfarfallio)
   return (
-    <main className="min-h-screen bg-gradient-to-br from-purple-900 via-fuchsia-800 to-pink-700 flex flex-col items-center justify-center text-white p-4 text-center">
-      <div className="space-y-8">
-        <h1 className="text-5xl md:text-7xl font-black tracking-tighter drop-shadow-lg">
-          ADDIO AL CELIBATO <br/> 
-          <span className="text-yellow-400 italic">SIMONE</span>
-        </h1>
-        
-        <p className="text-xl opacity-90 font-medium">Benvenuti nella Centrale Operativa delle Sfide</p>
-        
-        {/* Usiamo Link con lo stile del bottone direttamente */}
-        <Link 
-          href="/challenges" 
-          className="inline-block bg-white text-purple-900 px-10 py-5 rounded-full text-2xl font-black hover:scale-110 transition-transform shadow-2xl mt-8 cursor-pointer"
-        >
-          ENTRA NELLE SFIDE 🕺
-        </Link>
+    <main className="min-h-screen bg-gradient-to-br from-[#1a0521] to-[#0f0214] flex flex-col items-center justify-center p-6 text-white text-center">
+      <h1 className="text-5xl md:text-7xl font-black uppercase italic mb-2 tracking-tighter">ADDIO AL CELIBATO</h1>
+      <h2 className="text-3xl md:text-5xl font-black text-yellow-400 mb-12 italic uppercase">SIMONE</h2>
 
-        <div className="pt-10">
-          <span className="bg-green-500/20 text-green-400 px-4 py-2 rounded-full border border-green-500/50 text-sm font-bold animate-pulse">
-            ● DATABASE CONNESSO
-          </span>
-        </div>
+      {/* BOX COUNTDOWN */}
+      <div className="grid grid-cols-4 gap-3 mb-12 max-w-sm w-full min-h-[80px]">
+        {isMounted ? (
+          <>
+            {[
+              { label: "Giorni", val: timeLeft.days },
+              { label: "Ore", val: timeLeft.hours },
+              { label: "Min", val: timeLeft.minutes },
+              { label: "Sec", val: timeLeft.seconds }
+            ].map(item => (
+              <div key={item.label} className="bg-white/5 border border-white/10 p-3 rounded-2xl backdrop-blur-md">
+                <p className="text-2xl md:text-3xl font-black text-white">{item.val}</p>
+                <p className="text-[8px] font-bold uppercase text-fuchsia-400 tracking-widest">{item.label}</p>
+              </div>
+            ))}
+          </>
+        ) : (
+          <div className="col-span-4 text-xs font-bold uppercase opacity-20 animate-pulse text-center">Caricamento Countdown...</div>
+        )}
+      </div>
+
+      <p className="text-white/60 uppercase text-[10px] tracking-[0.3em] mb-6">Benvenuti nella Centrale Operativa delle Sfide</p>
+
+      <button 
+        onClick={() => router.push("/challenges")}
+        className="px-12 py-6 bg-white text-black rounded-full font-black text-xl uppercase hover:scale-105 transition-all shadow-[0_0_40px_rgba(255,255,255,0.15)]"
+      >
+        ENTRA NELLE SFIDE 🚀
+      </button>
+
+      <div className="mt-12 inline-flex items-center gap-2 px-4 py-2 bg-black/40 border border-white/5 rounded-full">
+         <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+         <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Database Connesso</span>
       </div>
     </main>
   );
