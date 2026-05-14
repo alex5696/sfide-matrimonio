@@ -15,6 +15,7 @@ export default function ChallengesPage() {
   const [selectedChallenge, setSelectedChallenge] = useState<any>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
+  // Funzione per rilevare video (inclusi formati Apple .mov)
   const isVideo = (url: string) => {
     return url?.match(/\.(mp4|webm|ogg|mov|quicktime)$/i);
   };
@@ -74,17 +75,22 @@ export default function ChallengesPage() {
   async function handleUpload(e: any, challengeId: number) {
     const file = e.target.files[0];
     if (!file) return;
+    
     const fileExt = file.name.split('.').pop();
     const fileName = `${challengeId}-${Math.random()}.${fileExt}`;
+
     const { error: uploadError } = await supabase.storage.from('media').upload(fileName, file);
     if (uploadError) { alert("Errore caricamento"); return; }
+
     const { data: { publicUrl } } = supabase.storage.from('media').getPublicUrl(fileName);
+
     await supabase.from("Challenges").update({
         media_url: publicUrl,
         is_completed: true,
         caption: caption,
         bonus_achieved: isBonusSelected
       }).eq('id', challengeId);
+
     setCaption("");
     setIsBonusSelected(false);
     setSelectedChallenge(null);
@@ -123,35 +129,49 @@ export default function ChallengesPage() {
     return true;
   });
 
-  if (loading) return <div className="min-h-screen bg-[#0f0214] flex items-center justify-center text-white font-black uppercase italic tracking-widest text-center">Sincronizzazione...</div>;
+  if (loading) return <div className="min-h-screen bg-[#0f0214] flex items-center justify-center text-white font-black uppercase italic tracking-widest">Sincronizzazione...</div>;
 
   return (
     <main className="min-h-screen bg-[#0f0214] text-white p-4 md:p-8 pb-20 print:bg-white print:text-black print:p-0">
       
-      {/* --- SEZIONE DIPLOMA (VISIBILE SOLO IN STAMPA SE TARGET RAGGIUNTO) --- */}
-      <div className="hidden print:flex flex-col items-center justify-center min-h-screen p-10 border-[20px] border-double border-black text-center">
+      {/* CSS PER LA STAMPA: Nasconde tutto tranne il diploma */}
+      <style jsx global>{`
+        @media print {
+          body * { visibility: hidden; }
+          .printable-diploma, .printable-diploma * { visibility: visible; }
+          .printable-diploma { 
+            position: absolute; left: 0; top: 0; width: 100%; height: 100vh; 
+            display: flex !important; flex-direction: column; justify-content: center; 
+            align-items: center; border: 15px double black; padding: 40px; background: white;
+          }
+          @page { margin: 0; size: auto; }
+        }
+      `}</style>
+
+      {/* SEZIONE DIPLOMA (Visibile solo in stampa se target raggiunto) */}
+      <div className={`printable-diploma hidden ${targetReached ? 'print:flex' : ''} flex-col items-center justify-center text-center bg-white text-black`}>
         <h1 className="text-6xl font-black uppercase italic mb-4">Diploma di Idoneità</h1>
-        <p className="text-2xl font-bold uppercase tracking-widest mb-10">Al Matrimonio</p>
-        <p className="text-xl mb-4 text-gray-600">Si certifica che il qui presente</p>
-        <h2 className="text-7xl font-black text-black uppercase mb-8 italic">SIMONE</h2>
-        <p className="max-w-2xl text-lg leading-relaxed mb-12">
-          Ha superato con successo le prove fisiche, psicologiche ed alcoliche stabilite dalla Centrale Operativa, totalizzando un punteggio di <span className="font-black text-2xl">{currentPoints} Punti</span> e dimostrando tempra d'acciaio e dignità discutibile.
+        <p className="text-2xl font-bold uppercase tracking-widest mb-10 border-b-2 border-black pb-2">Al Matrimonio</p>
+        <p className="text-xl mb-4 text-gray-600">Si certifica solennemente che</p>
+        <h2 className="text-7xl font-black uppercase mb-8 italic tracking-tighter">SIMONE</h2>
+        <p className="max-w-2xl text-lg leading-relaxed mb-12 px-10 text-center">
+          Ha superato con successo le prove fisiche, psicologiche ed alcoliche stabilite dalla <span className="font-bold uppercase">Centrale Operativa Addio al Celibato</span>, totalizzando un punteggio di <span className="font-black text-2xl">{currentPoints} Punti</span> e dimostrando una tempra degna di un futuro sposo.
         </p>
         <div className="flex justify-between w-full max-w-2xl mt-12 border-t-2 border-black pt-8">
             <div className="text-left">
-                <p className="font-bold uppercase">Data</p>
-                <p>{new Date().toLocaleDateString()}</p>
+                <p className="font-bold uppercase text-xs">Data della Gloria</p>
+                <p className="font-mono">{new Date().toLocaleDateString('it-IT')}</p>
             </div>
             <div className="text-right">
-                <p className="font-bold uppercase">La Commissione (Gli Amici)</p>
-                <p className="italic font-serif text-2xl">Firmato in originale</p>
+                <p className="font-bold uppercase text-xs text-black">La Commissione Esaminatrice</p>
+                <p className="italic font-serif text-2xl mt-2 text-black">Gli Amici di Sempre</p>
             </div>
         </div>
       </div>
 
       <div className="max-w-4xl mx-auto print:hidden">
         
-        {/* HEADER PUNTEGGIO */}
+        {/* BARRA PUNTEGGIO E IMPOSTAZIONI */}
         <div className="bg-white/5 p-6 rounded-[2.5rem] border border-white/20 mb-8 sticky top-4 z-30 backdrop-blur-3xl shadow-2xl">
           <div className="flex justify-between items-start mb-4">
             <div>
@@ -167,7 +187,7 @@ export default function ChallengesPage() {
           {isSettingsOpen && (
             <div className="mb-6 p-6 bg-black/60 rounded-[1.5rem] border border-fuchsia-500/30 space-y-6">
                 <div className="text-center">
-                    <p className="text-[10px] font-black uppercase text-fuchsia-400 mb-4 tracking-widest">Traguardo</p>
+                    <p className="text-[10px] font-black uppercase text-fuchsia-400 mb-4 tracking-widest">Traguardo Punti</p>
                     <input type="range" min="100" max="2000" step="50" value={targetPoints} onChange={(e) => updateTargetPoints(parseInt(e.target.value))} className="w-full accent-fuchsia-500 mb-4" />
                 </div>
                 <div className="pt-4 border-t border-white/10 text-center">
@@ -199,14 +219,13 @@ export default function ChallengesPage() {
           </div>
         )}
 
-        {/* FILTRI E AZIONI */}
+        {/* FILTRI E AZIONE PDF */}
         <div className="flex flex-wrap gap-2 mb-10">
           {['all', 'pending', 'completed'].map((f) => (
             <button key={f} onClick={() => setFilter(f)} className={`px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${filter === f ? 'bg-white text-black scale-105 shadow-lg' : 'bg-white/10 border border-white/10'}`}>
               {f === 'all' ? 'Tutte' : f === 'pending' ? 'Da fare' : 'Fatte'}
             </button>
           ))}
-          {/* Tasto Diploma/Report: cambia colore se ha vinto */}
           <button 
             onClick={() => window.print()} 
             className={`px-5 py-3 rounded-2xl text-[10px] font-black uppercase ml-auto shadow-lg transition-all active:scale-95 ${targetReached ? 'bg-yellow-400 text-black animate-pulse' : 'bg-green-600 text-white'}`}
@@ -215,7 +234,7 @@ export default function ChallengesPage() {
           </button>
         </div>
 
-        {/* GRIGLIA SFIDE */}
+        {/* LISTA DELLE SFIDE */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
           {filteredChallenges.map((challenge) => (
             <div key={challenge.id} onClick={() => { setSelectedChallenge(challenge); setIsBonusSelected(challenge.bonus_achieved); }} className={`p-6 rounded-[2rem] border-2 transition-all hover:border-fuchsia-500/50 cursor-pointer ${challenge.is_completed ? 'bg-green-500/10 border-green-500/30' : 'bg-white/5 border-white/10'}`}>
@@ -224,12 +243,12 @@ export default function ChallengesPage() {
                 {challenge.is_completed && <span className="text-green-400 font-bold italic text-xs tracking-tighter">SUCCESS ✅</span>}
               </div>
               <h2 className="text-xl font-bold uppercase truncate">{challenge.title}</h2>
-              <p className="text-[10px] opacity-40 mt-2 font-black tracking-widest text-right italic">VEDI DETTAGLI →</p>
+              <p className="text-[10px] opacity-40 mt-2 font-black tracking-widest text-right">DETTAGLI →</p>
             </div>
           ))}
         </div>
 
-        {/* MODALE DETTAGLI */}
+        {/* MODALE DETTAGLI (FIX VIDEO E IPHONE) */}
         {selectedChallenge && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/95 backdrop-blur-md" onClick={() => setSelectedChallenge(null)}></div>
@@ -257,8 +276,8 @@ export default function ChallengesPage() {
                   )}
                   {selectedChallenge.caption && <p className="italic text-center text-fuchsia-200 opacity-80">"{selectedChallenge.caption}"</p>}
                   <div className="flex gap-2">
-                    <button onClick={() => downloadPhoto(selectedChallenge.media_url, selectedChallenge.title)} className="flex-1 bg-blue-600/30 text-blue-300 py-4 rounded-2xl font-black text-[10px] uppercase">💾 Salva</button>
-                    <button onClick={() => handleDelete(selectedChallenge.id, selectedChallenge.media_url)} className="flex-1 bg-red-600/20 text-red-400 py-4 rounded-2xl font-black text-[10px] uppercase">🗑️ Elimina</button>
+                    <button onClick={() => downloadPhoto(selectedChallenge.media_url, selectedChallenge.title)} className="flex-1 bg-blue-600/30 text-blue-300 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest">💾 Salva</button>
+                    <button onClick={() => handleDelete(selectedChallenge.id, selectedChallenge.media_url)} className="flex-1 bg-red-600/20 text-red-400 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest">🗑️ Elimina</button>
                   </div>
                 </div>
               ) : (
@@ -271,7 +290,7 @@ export default function ChallengesPage() {
                     </div>
                   )}
                   <label className="block w-full bg-white text-black text-center py-5 rounded-2xl font-black cursor-pointer uppercase hover:bg-yellow-400 transition-all active:scale-95 shadow-xl">
-                    📸 Carica Foto/Video
+                    📸 Carica Prova
                     <input type="file" accept="image/*,video/*" capture="environment" className="hidden" onChange={(e) => handleUpload(e, selectedChallenge.id)} />
                   </label>
                 </div>
