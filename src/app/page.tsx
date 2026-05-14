@@ -1,84 +1,267 @@
 "use client";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { supabase } from "../lib/supabase"; 
 
-export default function HomePage() {
-  const router = useRouter();
-  const [weddingDate, setWeddingDate] = useState("2026-06-20T00:00:00");
-  const [isMounted, setIsMounted] = useState(false);
-  const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+import { useEffect, useState } from "react";
+import { supabase } from "../../lib/supabase";
+import Link from 'next/link';
+
+export default function ChallengesPage() {
+  const [challenges, setChallenges] = useState<any[]>([]);
+  const [targetPoints, setTargetPoints] = useState(1000);
+  const [weddingDate, setWeddingDate] = useState("2026-06-20T00:00:00"); 
+  const [loading, setLoading] = useState(true);
+  const [caption, setCaption] = useState("");
+  const [isBonusSelected, setIsBonusSelected] = useState(false);
+  const [filter, setFilter] = useState("all");
+  const [selectedChallenge, setSelectedChallenge] = useState<any>(null);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   useEffect(() => {
-    setIsMounted(true);
-    async function fetchSettings() {
-      const { data } = await supabase.from("Settings").select("wedding_date").maybeSingle();
-      if (data?.wedding_date) {
-        setWeddingDate(data.wedding_date);
-      }
-    }
-    fetchSettings();
+    fetchData();
   }, []);
 
-  useEffect(() => {
-    if (!isMounted) return;
+  async function fetchData() {
+    setLoading(true);
+    
+    // Recupero sfide ordinate per punti
+    const { data: challengesData } = await supabase
+      .from("Challenges")
+      .select("*")
+      .order('points', { ascending: true });
 
-    const interval = setInterval(() => {
-      const target = new Date(weddingDate).getTime();
-      const now = new Date().getTime();
-      const diff = target - now;
+    // Recupero impostazioni
+    const { data: settingsData } = await supabase
+      .from("Settings")
+      .select("target_points, wedding_date")
+      .eq('id', 1) // Cerchiamo specificamente la riga 1
+      .maybeSingle();
 
-      if (diff > 0) {
-        setTimeLeft({
-          days: Math.floor(diff / (1000 * 60 * 60 * 24)),
-          hours: Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
-          minutes: Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60)),
-          seconds: Math.floor((diff % (1000 * 60)) / 1000),
-        });
-      }
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [weddingDate, isMounted]);
+    if (challengesData) setChallenges(challengesData);
+    if (settingsData) {
+        if (settingsData.target_points) setTargetPoints(settingsData.target_points);
+        if (settingsData.wedding_date) setWeddingDate(settingsData.wedding_date);
+    }
+    setLoading(false);
+  }
+
+  async function updateTargetPoints(newVal: number) {
+    const value = isNaN(newVal) ? 0 : newVal;
+    setTargetPoints(value);
+    await supabase.from("Settings").upsert({ id: 1, target_points: value });
+  }
+
+  // QUESTA È LA FUNZIONE CHE SALVA LA DATA SU SUPABASE
+  async function updateWeddingDate(newDate: string) {
+    setWeddingDate(newDate);
+    // Upsert: se la riga 1 esiste la aggiorna, altrimenti la crea
+    await supabase
+      .from("Settings")
+      .upsert({ id: 1, wedding_date: newDate }); 
+  }
+
+  const downloadPhoto = async (url: string, filename: string) => {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = `${filename.replace(/\s+/g, '_')}.jpg`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      alert("Tieni premuto sulla foto per salvarla manualmente.");
+    }
+  };
+
+  async function handleUpload(e: any, challengeId: number) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${challengeId}-${Math.random()}.${fileExt}`;
+    const { error: uploadError } = await supabase.storage.from('media').upload(fileName, file);
+    if (uploadError) { alert("Errore: " + uploadError.message); return; }
+    const { data: { publicUrl } } = supabase.storage.from('media').getPublicUrl(fileName);
+
+    await supabase.from("Challenges").update({
+        media_url: publicUrl,
+        is_completed: true,
+        caption: caption,
+        bonus_achieved: isBonusSelected
+      }).eq('id', challengeId);
+
+    setCaption("");
+    setIsBonusSelected(false);
+    setSelectedChallenge(null);
+    fetchData();
+  }
+
+  async function handleDelete(challengeId: number, mediaUrl: string) {
+    if (!confirm("Vuoi davvero eliminare questa prova?")) return;
+    const fileName = mediaUrl.split('/').pop();
+    if (fileName) { await supabase.storage.from('media').remove([fileName]); }
+    await supabase.from("Challenges").update({
+        media_url: null,
+        is_completed: false,
+        caption: null,
+        bonus_achieved: false
+    }).eq('id', challengeId);
+    setSelectedChallenge(null); fetchData();
+  }
+
+  const currentPoints = challenges
+    .filter(c => c.is_completed)
+    .reduce((sum, c) => {
+        const base = c.points || 0;
+        const extra = (c.bonus_achieved && c.bonus_points) ? c.bonus_points : 0;
+        return sum + base + extra;
+    }, 0);
+
+  const realPercentage = targetPoints > 0 ? (currentPoints / targetPoints) * 100 : 0;
+  const barWidth = Math.min(realPercentage, 100);
+  const allCompleted = challenges.length > 0 && challenges.every(c => c.is_completed);
+  const targetReached = realPercentage >= 100;
+
+  const filteredChallenges = challenges.filter(c => {
+    if (filter === "pending") return !c.is_completed;
+    if (filter === "completed") return c.is_completed;
+    return true;
+  });
+
+  if (loading) return <div className="min-h-screen bg-[#0f0214] flex items-center justify-center text-white font-black uppercase italic tracking-widest">Sync in corso...</div>;
 
   return (
-    /* RIPRISTINATO IL GRADIENTE ORIGINALE VIOLA/ROSA */
-    <main className="min-h-screen bg-gradient-to-br from-[#8000ff] via-[#b300ff] to-[#ff0080] flex flex-col items-center justify-center p-6 text-white text-center">
-      <h1 className="text-5xl md:text-7xl font-black uppercase italic mb-2 tracking-tighter drop-shadow-lg">ADDIO AL CELIBATO</h1>
-      <h2 className="text-3xl md:text-5xl font-black text-yellow-400 mb-12 italic uppercase drop-shadow-md">SIMONE</h2>
+    <main className="min-h-screen bg-[#0f0214] text-white p-4 md:p-8 pb-20 print:bg-white print:text-black">
+      <div className="max-w-4xl mx-auto">
+        
+        {/* PROGRESS BAR & SETTINGS */}
+        <div className="bg-white/5 p-6 rounded-[2.5rem] border border-white/20 mb-8 sticky top-4 z-30 backdrop-blur-3xl shadow-2xl print:hidden">
+          <div className="flex justify-between items-start mb-4">
+            <div>
+              <p className="text-[12px] font-black uppercase tracking-[0.2em] text-fuchsia-300 mb-1">Punteggio Simone</p>
+              <div className="flex items-baseline gap-2">
+                <p className="text-6xl font-black text-yellow-400 italic leading-none">{currentPoints}</p>
+                <p className="text-xl font-bold text-white/50">/ {targetPoints}</p>
+              </div>
+            </div>
+            <button onClick={() => setIsSettingsOpen(!isSettingsOpen)} className={`p-3 rounded-2xl border transition-all ${isSettingsOpen ? 'bg-fuchsia-600 border-white' : 'bg-white/10 border-white/10'}`}>⚙️</button>
+          </div>
 
-      {/* BOX COUNTDOWN - STILE SEMITRASPARENTE PER GRADIENTE */}
-      <div className="grid grid-cols-4 gap-3 mb-12 max-w-sm w-full min-h-[80px]">
-        {isMounted ? (
-          <>
-            {[
-              { label: "Giorni", val: timeLeft.days },
-              { label: "Ore", val: timeLeft.hours },
-              { label: "Min", val: timeLeft.minutes },
-              { label: "Sec", val: timeLeft.seconds }
-            ].map(item => (
-              <div key={item.label} className="bg-black/20 border border-white/20 p-3 rounded-2xl backdrop-blur-md shadow-xl">
-                <p className="text-2xl md:text-3xl font-black text-white">{item.val}</p>
-                <p className="text-[8px] font-bold uppercase text-yellow-300 tracking-widest">{item.label}</p>
+          {isSettingsOpen && (
+            <div className="mb-6 p-6 bg-black/60 rounded-[1.5rem] border border-fuchsia-500/30 space-y-6">
+                <div className="text-center">
+                    <p className="text-[10px] font-black uppercase text-fuchsia-400 mb-4 tracking-widest">Regola il Traguardo</p>
+                    <input type="range" min="100" max="2000" step="5" value={targetPoints} onChange={(e) => updateTargetPoints(parseInt(e.target.value))} className="w-full accent-fuchsia-500 mb-4" />
+                    <input type="number" value={targetPoints} onChange={(e) => updateTargetPoints(parseInt(e.target.value))} className="bg-white/10 border border-white/20 rounded-lg px-3 py-1 w-24 text-center font-black text-yellow-400 focus:outline-none" />
+                </div>
+
+                <div className="pt-4 border-t border-white/10 text-center">
+                    <p className="text-[10px] font-black uppercase text-fuchsia-400 mb-4 tracking-widest">Data del Matrimonio (Countdown Home)</p>
+                    <input type="datetime-local" value={weddingDate.substring(0, 16)} onChange={(e) => updateWeddingDate(e.target.value)} className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 font-bold text-white focus:outline-none focus:border-fuchsia-500" />
+                </div>
+            </div>
+          )}
+          
+          <div className="w-full bg-black/50 h-5 rounded-full overflow-hidden p-1 border border-white/20">
+            <div className={`h-full rounded-full transition-all duration-1000 ${targetReached ? 'bg-gradient-to-r from-yellow-400 to-green-400' : 'bg-fuchsia-600'}`} style={{ width: `${barWidth}%` }}></div>
+          </div>
+        </div>
+
+        {/* MESSAGGI */}
+        {!isSettingsOpen && (
+          <div className="space-y-4 mb-8 print:hidden">
+            {allCompleted ? (
+              <div className="bg-gradient-to-r from-yellow-400 to-orange-500 text-black p-8 rounded-[2.5rem] text-center border-4 border-white animate-bounce shadow-[0_0_40px_rgba(250,204,21,0.4)]">
+                <h2 className="text-4xl font-black uppercase italic leading-tight">🏆 YOU ARE A HERO</h2>
+                <p className="font-bold text-lg mt-2">Adesso tutti quei bastardi ti offriranno cena e drink! 🍻</p>
+              </div>
+            ) : targetReached ? (
+              <div className="bg-fuchsia-600 text-white p-8 rounded-[2.5rem] text-center border-4 border-white shadow-2xl">
+                <h2 className="text-3xl font-black uppercase">🔥 MISSIONE COMPIUTA</h2>
+                <p className="font-bold mt-2">Adesso puoi finalmente sposarti! (forse) 💍</p>
+              </div>
+            ) : null}
+          </div>
+        )}
+
+        {/* FILTRI */}
+        <div className="flex flex-wrap gap-2 mb-10 print:hidden">
+          {['all', 'pending', 'completed'].map((f) => (
+            <button key={f} onClick={() => setFilter(f)} className={`px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${filter === f ? 'bg-white text-black scale-105' : 'bg-white/10 border border-white/10'}`}>
+              {f === 'all' ? 'Tutte' : f === 'pending' ? 'Da fare' : 'Fatte'}
+            </button>
+          ))}
+          <button onClick={() => window.print()} className="px-5 py-3 rounded-2xl text-[10px] font-black uppercase bg-green-600 text-white ml-auto shadow-lg hover:bg-green-500">📄 Report PDF</button>
+        </div>
+
+        {/* GRID SFIDE */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 print:hidden">
+          {filteredChallenges.map((challenge) => (
+            <div key={challenge.id} onClick={() => { setSelectedChallenge(challenge); setIsBonusSelected(challenge.bonus_achieved); }} className={`p-6 rounded-[2rem] border-2 transition-all hover:border-fuchsia-500/50 cursor-pointer ${challenge.is_completed ? 'bg-green-500/10 border-green-500/30' : 'bg-white/5 border-white/10'}`}>
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-yellow-400 font-black">+{challenge.points} PT</span>
+                {challenge.is_completed && <span className="text-green-400 font-bold">✅</span>}
+              </div>
+              <h2 className="text-xl font-bold uppercase truncate">{challenge.title}</h2>
+              <p className="text-[10px] opacity-40 mt-2">DETTAGLI →</p>
+            </div>
+          ))}
+        </div>
+
+        {/* POP-UP DETTAGLI */}
+        {selectedChallenge && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 print:hidden">
+            <div className="absolute inset-0 bg-black/90 backdrop-blur-md" onClick={() => setSelectedChallenge(null)}></div>
+            <div className="bg-[#1a0521] border border-white/20 w-full max-w-lg rounded-[2.5rem] p-8 relative z-10 shadow-2xl">
+              <button onClick={() => setSelectedChallenge(null)} className="absolute top-6 right-6 text-2xl">✕</button>
+              <h2 className="text-2xl font-black text-yellow-400 uppercase mb-4">{selectedChallenge.title}</h2>
+              <p className="text-sm opacity-70 mb-8">{selectedChallenge.descriptions}</p>
+              {selectedChallenge.is_completed ? (
+                <div className="space-y-4 text-center">
+                  <img src={selectedChallenge.media_url} className="w-full aspect-video object-cover rounded-2xl" alt="Prova" />
+                  {selectedChallenge.caption && <p className="italic text-fuchsia-200">"{selectedChallenge.caption}"</p>}
+                  <div className="flex gap-2">
+                    <button onClick={() => downloadPhoto(selectedChallenge.media_url, selectedChallenge.title)} className="flex-1 bg-blue-600 py-4 rounded-2xl font-black text-[10px] uppercase">💾 Scarica</button>
+                    <button onClick={() => handleDelete(selectedChallenge.id, selectedChallenge.media_url)} className="flex-1 bg-red-600/20 text-red-400 py-4 rounded-2xl border border-red-600/30 font-black text-[10px] uppercase">🗑️ Elimina</button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <input type="text" placeholder="Didascalia..." className="w-full bg-black/40 border border-white/10 p-5 rounded-2xl outline-none text-white" onChange={(e) => setCaption(e.target.value)} value={caption} />
+                  {selectedChallenge.bonus_points > 0 && (
+                    <div onClick={() => setIsBonusSelected(!isBonusSelected)} className={`p-4 rounded-2xl border-2 cursor-pointer transition-all ${isBonusSelected ? 'bg-yellow-400 text-black border-white' : 'bg-white/5 border-white/10'}`}>
+                      <p className="text-[10px] font-black uppercase">🔥 Bonus (+{selectedChallenge.bonus_points} PT)</p>
+                      <p className="text-xs">{selectedChallenge.bonus_description}</p>
+                    </div>
+                  )}
+                  <label className="block w-full bg-white text-black text-center py-5 rounded-2xl font-black cursor-pointer uppercase">📸 Carica Prova
+                    <input type="file" accept="image/*,video/*" capture="environment" className="hidden" onChange={(e) => handleUpload(e, selectedChallenge.id)} />
+                  </label>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* GALLERIA RICORDI */}
+        <div className="mt-20 print:mt-0">
+          <h2 className="text-3xl font-black uppercase italic text-center mb-8 text-yellow-400 print:hidden">📸 Galleria Ricordi</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 print:grid-cols-1">
+            {challenges.filter(c => c.is_completed).map((completed) => (
+              <div key={`gallery-${completed.id}`} className="group relative rounded-2xl overflow-hidden aspect-square bg-black print:aspect-auto">
+                <img src={completed.media_url} className="w-full h-full object-cover opacity-80 print:opacity-100" alt="Ricordo" />
+                <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black text-[10px] uppercase font-bold print:relative print:text-black print:bg-none print:text-xl print:mt-4">
+                   <p className="print:font-black">{completed.title}</p>
+                   {completed.caption && <p className="italic opacity-70">"{completed.caption}"</p>}
+                </div>
               </div>
             ))}
-          </>
-        ) : (
-          <div className="col-span-4 text-xs font-bold uppercase opacity-40 animate-pulse text-center">Inizializzazione...</div>
-        )}
-      </div>
-
-      <p className="text-white/90 uppercase text-[10px] font-bold tracking-[0.3em] mb-6 drop-shadow-sm">Benvenuti nella Centrale Operativa delle Sfide</p>
-
-      <button 
-        onClick={() => router.push("/challenges")}
-        className="px-12 py-6 bg-white text-[#8000ff] rounded-full font-black text-xl uppercase hover:scale-105 transition-all shadow-[0_10px_40px_rgba(0,0,0,0.3)]"
-      >
-        ENTRA NELLE SFIDE 🚀
-      </button>
-
-      <div className="mt-12 inline-flex items-center gap-2 px-4 py-2 bg-black/20 border border-white/10 rounded-full backdrop-blur-sm">
-         <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-         <span className="text-[10px] font-bold text-white/60 uppercase tracking-widest">Database Connesso</span>
+          </div>
+        </div>
+        
+        <div className="mt-20 text-center print:hidden">
+           <Link href="/" className="text-white/20 hover:text-white underline text-xs uppercase tracking-widest">← Torna alla Home</Link>
+        </div>
       </div>
     </main>
   );
